@@ -5,15 +5,22 @@ permissions:
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      require_signed_package:
+        description: "Require a signed package"
+        required: false
+        default: "false"
 
 jobs:
   build-release-artifacts:
     runs-on: macos-latest
     env:
-      CI_REQUIRE_SIGNED_PACKAGE: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+      CI_REQUIRE_SIGNED_PACKAGE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.require_signed_package == 'true' && '1' || '0' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
