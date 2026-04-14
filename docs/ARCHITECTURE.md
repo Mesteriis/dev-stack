@@ -62,7 +62,10 @@ Phase 1 keeps one core target, but the code is now split by responsibility insid
 ### `Sources/DevStackCore/Runtime/`
 
 - `RuntimeStatusService.swift`: docker context discovery, status snapshots, stale profile cleanup
-- `RuntimeLifecycleService.swift`: profile activation, compose lifecycle, docker context switching, remote host preparation
+- `RuntimeLifecycleService.swift`: orchestration facade for profile and compose action flows
+- `RuntimeComposeFlowService.swift`: profile compose up/down/restart wiring and context switching
+- `RuntimeServerPreparationService.swift`: local/remote server checks, bootstrap and context preparation
+- `RuntimeProfileHooksService.swift`: hook execution and shell exports helpers
 - `TunnelService.swift`: launchd tunnel setup and teardown
 - `RemoteSyncService.swift`: managed bind-mount rewrite and remote project sync
 - `RuntimeDiagnosticsService.swift`: compose and remote diagnostics
