@@ -136,7 +136,8 @@ Owns editor/import window coordination and profile persistence callbacks.
 - `Sources/DevStackCore/SingleInstanceCoordinator.swift`: single-instance process lock
 - `Sources/DevStackCore/ProjectContext.swift`: Git and IDE state integration
 - `Sources/DevStackCore/ProfileImportService.swift`: compose import to draft-profile wiring
-- `Sources/DevStackCore/ContextUtilities.swift`: value generators and clipboard parsing helpers
+- `Sources/DevStackCore/Context/ContextValueGenerator.swift`: value generators and env helper
+- `Sources/DevStackCore/Context/ClipboardSmartParser.swift`: clipboard content parser for quick env heuristics
 
 ## Persistence
 
