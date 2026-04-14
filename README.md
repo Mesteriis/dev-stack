@@ -87,10 +87,11 @@ The installer places:
 - `DevStackMenu.app` and `Import Compose To DX.app` into `/Applications`
 - `dx` into `/usr/local/bin`
 
-If `dx` is still not found in your shell after install, run:
+If installation succeeds, `dx` is available at `/usr/local/bin/dx` and should run immediately in a new shell.
+If an existing shell still does not resolve `dx` (rare `zsh` command cache case), reopen the shell or run:
 
 ```sh
-export PATH="/usr/local/bin:$PATH"
+rehash
 ```
 
 This `.pkg` is the primary release artifact built by CI.

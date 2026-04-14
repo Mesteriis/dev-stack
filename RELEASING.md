@@ -25,6 +25,7 @@ Do not bump `Resources/Info.plist` for ordinary maintenance, documentation sync 
 
 It performs installer + pkgutil + post-install checks.
 7. Sanity-check generated apps in `/Applications` after install (script already validates this, including `/Applications/Import Compose To DX.app` and `/usr/local/bin/dx`).
+   - Release package install is expected to be self-validating; `postinstall` fails if `/usr/local/bin/dx` is not installed or executable.
 8. Verify the main app and compose-import helper use distinct bundle identifiers in the built artifacts.
 9. Verify single-instance behavior by launching the installed app twice and confirming the second launch exits while the original instance stays alive.
 10. If signing credentials are configured, run `workflow_dispatch` on Release Artifacts for signed/notarized output.

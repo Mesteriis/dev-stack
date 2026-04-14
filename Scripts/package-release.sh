@@ -36,6 +36,7 @@ ditto "$DX_BIN" "$PKG_ROOT_DIR/usr/local/bin/dx"
 chmod 755 "$PKG_ROOT_DIR/usr/local/bin/dx"
 
 pkgbuild \
+  --scripts "$REPO_DIR/Scripts/pkg-scripts" \
   --root "$PKG_ROOT_DIR" \
   --identifier "$PACKAGE_ID" \
   --version "$VERSION" \

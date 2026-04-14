@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+if [ -e /usr/local/bin/dx ]; then
+  rm -f /usr/local/bin/dx
+fi
