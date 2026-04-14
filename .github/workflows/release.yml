@@ -11,7 +11,6 @@ jobs:
     runs-on: macos-latest
     env:
       CI_REQUIRE_SIGNED_PACKAGE: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
-      REQUIRE_NOTARIZE: ${{ github.event_name == 'workflow_dispatch' && secrets.NOTARYTOOL_KEY_ID != '' && secrets.NOTARYTOOL_ISSUER_ID != '' && secrets.NOTARYTOOL_KEY_P8_BASE64 != '' && '1' || '0' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -21,7 +20,7 @@ jobs:
 
       - name: Validate package
         run: |
-          PKG_PATH="$(ls -1 dist/DevStackMenu-*.pkg | head -n 1)"
+          PKG_PATH="$(find dist -maxdepth 1 -name 'DevStackMenu-*.pkg' -type f | sort | head -n 1)"
           if [ "${CI_REQUIRE_SIGNED_PACKAGE}" = "1" ]; then
             ./Scripts/verify-package.sh "$PKG_PATH" 1
           else
@@ -29,22 +28,33 @@ jobs:
           fi
 
       - name: Sign and optional notarize package
-        if: ${{ secrets.CODESIGN_INSTALLER_IDENTITY != '' && secrets.MACOS_INSTALLER_CERT_P12_BASE64 != '' }}
         env:
           CODESIGN_INSTALLER_IDENTITY: ${{ secrets.CODESIGN_INSTALLER_IDENTITY }}
           MACOS_INSTALLER_CERT_P12_BASE64: ${{ secrets.MACOS_INSTALLER_CERT_P12_BASE64 }}
           MACOS_INSTALLER_CERT_PASSWORD: ${{ secrets.MACOS_INSTALLER_CERT_PASSWORD }}
-          REQUIRE_NOTARIZE: ${{ env.REQUIRE_NOTARIZE }}
           NOTARYTOOL_KEY_ID: ${{ secrets.NOTARYTOOL_KEY_ID }}
           NOTARYTOOL_ISSUER_ID: ${{ secrets.NOTARYTOOL_ISSUER_ID }}
           NOTARYTOOL_KEY_P8_BASE64: ${{ secrets.NOTARYTOOL_KEY_P8_BASE64 }}
         run: |
-          PKG_PATH="$(ls -1 dist/DevStackMenu-*.pkg | head -n 1)"
-          ./Scripts/sign-notarize-package.sh "$PKG_PATH"
+          PKG_PATH="$(find dist -maxdepth 1 -name 'DevStackMenu-*.pkg' -type f | sort | head -n 1)"
+          if [ -n "${CODESIGN_INSTALLER_IDENTITY}" ] && [ -n "${MACOS_INSTALLER_CERT_P12_BASE64}" ]; then
+            if [ -n "${NOTARYTOOL_KEY_ID}" ] && [ -n "${NOTARYTOOL_ISSUER_ID}" ] && [ -n "${NOTARYTOOL_KEY_P8_BASE64}" ]; then
+              export REQUIRE_NOTARIZE=1
+            else
+              export REQUIRE_NOTARIZE=0
+            fi
+            ./Scripts/sign-notarize-package.sh "$PKG_PATH"
+          else
+            if [ "${CI_REQUIRE_SIGNED_PACKAGE}" = "1" ]; then
+              echo "Signing requested but secrets are not configured." >&2
+              exit 1
+            fi
+            echo "Signing secrets are not configured; skipping signing."
+          fi
 
       - name: Re-check package
         run: |
-          PKG_PATH="$(ls -1 dist/DevStackMenu-*.pkg | head -n 1)"
+          PKG_PATH="$(find dist -maxdepth 1 -name 'DevStackMenu-*.pkg' -type f | sort | head -n 1)"
           ./Scripts/verify-package.sh "$PKG_PATH" "$CI_REQUIRE_SIGNED_PACKAGE"
 
       - name: Upload installer package

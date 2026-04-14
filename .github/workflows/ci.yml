@@ -51,15 +51,16 @@ jobs:
 
       - name: Build summary
         run: |
-          ls -1 dist/DevStackMenu-*.pkg
-          PKG_PATH="$(ls -1 dist/DevStackMenu-*.pkg | head -n 1)"
+          find dist -maxdepth 1 -name 'DevStackMenu-*.pkg' -type f | sort
+          PKG_PATH="$(find dist -maxdepth 1 -name 'DevStackMenu-*.pkg' -type f | sort | head -n 1)"
           pkgutil --expand "$PKG_PATH" /tmp/devstackmenu-pkg-expanded
           ls -la /tmp/devstackmenu-pkg-expanded
           ./Scripts/verify-package.sh "$PKG_PATH" "$CI_REQUIRE_SIGNED_PACKAGE"
 
       - name: Install package (smoke)
         run: |
-          sudo installer -pkg "$(ls -1 dist/DevStackMenu-*.pkg | head -n 1)" -target /
+          PKG_PATH="$(find dist -maxdepth 1 -name 'DevStackMenu-*.pkg' -type f | sort | head -n 1)"
+          sudo installer -pkg "$PKG_PATH" -target /
           [ -x /usr/local/bin/dx ]
           [ -d /Applications/DevStackMenu.app ]
 
