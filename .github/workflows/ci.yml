@@ -10,6 +10,8 @@ jobs:
   build-test:
     name: Build, test, package
     runs-on: macos-latest
+    env:
+      CI_REQUIRE_SIGNED_PACKAGE: "0"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -32,6 +34,8 @@ jobs:
           sh -n Scripts/build-app.sh
           sh -n Scripts/install-local.sh
           sh -n Scripts/package-release.sh
+          sh -n Scripts/verify-package.sh
+          sh -n Scripts/sign-notarize-package.sh
 
       - name: Build
         run: make build
@@ -48,8 +52,10 @@ jobs:
       - name: Build summary
         run: |
           ls -1 dist/DevStackMenu-*.pkg
-          pkgutil --expand "$(ls -1 dist/DevStackMenu-*.pkg | head -n 1)" /tmp/devstackmenu-pkg-expanded
+          PKG_PATH="$(ls -1 dist/DevStackMenu-*.pkg | head -n 1)"
+          pkgutil --expand "$PKG_PATH" /tmp/devstackmenu-pkg-expanded
           ls -la /tmp/devstackmenu-pkg-expanded
+          ./Scripts/verify-package.sh "$PKG_PATH" "$CI_REQUIRE_SIGNED_PACKAGE"
 
       - name: Install package (smoke)
         run: |

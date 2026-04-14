@@ -8,6 +8,8 @@ The format is inspired by Keep a Changelog, and the project follows a pragmatic 
 
 ### Added
 
+- Release packaging now ships as `.pkg` (apps + `dx`) and is validated in CI by payload/signature checks.
+- Optional macOS installer signing/notarization hooks were added to release workflow for production-like distribution.
 - Swift Package Manager repository structure with `Sources/`, `Resources/`, `Scripts/` and maintainer docs
 - repository documentation and OSS metadata
 - CI workflow for build, test and app bundle smoke build
