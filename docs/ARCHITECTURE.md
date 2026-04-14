@@ -111,7 +111,10 @@ Owns editor/import window coordination and profile persistence callbacks.
 ### CLI And Executables
 
 - `Sources/DevStackCore/DXCLI.swift`: CLI parsing and workflow services
-- `Sources/dx/main.swift`: terminal UX and macOS app bridge
+- `Sources/dx/main.swift`: CLI command parsing and orchestration entrypoint
+- `Sources/dx/DXWorkflowHandlers.swift`: command handlers and helper flow for `dx`
+- `Sources/dx/DXTerminal.swift`: terminal I/O helpers for interactive commands
+- `Sources/dx/AppLauncher.swift`: macOS app bridge
 - `Sources/DevStackMenu/main.swift`: thin app entry point
 - `Sources/DevStackSmokeTests/main.swift`: thin smoke runner
 - `Sources/DevStackSmokeTests/SmokeChecks.swift`: smoke verification logic kept out of shipping core
@@ -172,5 +175,4 @@ Release distribution is produced through `Scripts/package-release.sh` and uses a
 - canonical compose planning depends on `docker compose config`; the fallback parser exists only for degraded import scenarios
 - remote host bootstrap is currently optimized for apt-based Linux dev hosts
 - the profile editor is split by workflow, but still remains an AppKit-heavy surface without dedicated UI tests
-- `dx/main.swift` still contains the existing macOS app bridge and has not been extracted yet
 - smoke checks validate critical logic, but there is no full UI automation
