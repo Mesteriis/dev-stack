@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+set -o pipefail
 
 REPO_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 PKG_PATH=""
@@ -20,7 +21,7 @@ if [ "$#" -ge 1 ]; then
 fi
 
 if [ -z "$PKG_PATH" ]; then
-  PKG_PATH="$(cd "$REPO_DIR" && find dist -maxdepth 1 -name 'DevStackMenu-*.pkg' -type f | sort | head -n 1 || true)"
+  PKG_PATH="$(cd "$REPO_DIR" && ls -1t dist/DevStackMenu-*.pkg 2>/dev/null | head -n 1 || true)"
 fi
 
 if [ -z "$PKG_PATH" ] || [ ! -f "$PKG_PATH" ]; then

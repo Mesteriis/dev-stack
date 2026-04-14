@@ -15,7 +15,7 @@ package:
 	./Scripts/package-release.sh
 
 install-package:
-	@PACKAGE_PATH=$$(ls "$(PWD)/dist"/DevStackMenu-*.pkg 2>/dev/null | head -n 1); \
+	@PACKAGE_PATH=$$(ls -1t "$(PWD)/dist"/DevStackMenu-*.pkg 2>/dev/null | head -n 1); \
 	if [ -z "$$PACKAGE_PATH" ]; then \
 		echo "No package found. Run \`make package\` first."; \
 		exit 1; \

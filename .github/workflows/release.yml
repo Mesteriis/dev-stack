@@ -23,7 +23,7 @@ jobs:
 
       - name: Validate package
         run: |
-          PKG_PATH="$(find dist -maxdepth 1 -name 'DevStackMenu-*.pkg' -type f | sort | head -n 1)"
+          PKG_PATH="$(ls -1t dist/DevStackMenu-*.pkg 2>/dev/null | head -n 1)"
           if [ "${CI_REQUIRE_SIGNED_PACKAGE}" = "1" ]; then
             ./Scripts/verify-package.sh "$PKG_PATH" 1
           else
@@ -39,7 +39,7 @@ jobs:
           NOTARYTOOL_ISSUER_ID: ${{ secrets.NOTARYTOOL_ISSUER_ID }}
           NOTARYTOOL_KEY_P8_BASE64: ${{ secrets.NOTARYTOOL_KEY_P8_BASE64 }}
         run: |
-          PKG_PATH="$(find dist -maxdepth 1 -name 'DevStackMenu-*.pkg' -type f | sort | head -n 1)"
+          PKG_PATH="$(ls -1t dist/DevStackMenu-*.pkg 2>/dev/null | head -n 1)"
           if [ -n "${CODESIGN_INSTALLER_IDENTITY}" ] && [ -n "${MACOS_INSTALLER_CERT_P12_BASE64}" ]; then
             if [ -n "${NOTARYTOOL_KEY_ID}" ] && [ -n "${NOTARYTOOL_ISSUER_ID}" ] && [ -n "${NOTARYTOOL_KEY_P8_BASE64}" ]; then
               export REQUIRE_NOTARIZE=1
@@ -57,7 +57,7 @@ jobs:
 
       - name: Re-check package
         run: |
-          PKG_PATH="$(find dist -maxdepth 1 -name 'DevStackMenu-*.pkg' -type f | sort | head -n 1)"
+          PKG_PATH="$(ls -1t dist/DevStackMenu-*.pkg 2>/dev/null | head -n 1)"
           ./Scripts/verify-package.sh "$PKG_PATH" "$CI_REQUIRE_SIGNED_PACKAGE"
 
       - name: Publish package to GitHub release
@@ -65,7 +65,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          PKG_PATH="$(find dist -maxdepth 1 -name 'DevStackMenu-*.pkg' -type f | sort | head -n 1)"
+          PKG_PATH="$(ls -1t dist/DevStackMenu-*.pkg 2>/dev/null | head -n 1)"
           if gh release view "${{ github.ref_name }}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             gh release upload "${{ github.ref_name }}" "$PKG_PATH" --repo "${GITHUB_REPOSITORY}" --clobber
           else
