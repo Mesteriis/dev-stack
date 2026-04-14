@@ -8,7 +8,7 @@ extension AppDelegate {
         }
         if let profile = try? store.loadProfile(named: profileName),
            profile.compose.autoUpOnActivate,
-           !confirmComposeUpPreview(profileName: profileName)
+           !ReportActionService.confirmComposeUpPreview(profileName: profileName, store: store)
         {
             return
         }
@@ -39,7 +39,7 @@ extension AppDelegate {
         guard let profileName = selectedProfileName() else {
             return
         }
-        guard confirmComposeUpPreview(profileName: profileName) else {
+        guard ReportActionService.confirmComposeUpPreview(profileName: profileName, store: store) else {
             return
         }
         runRuntimeAction(successMessage: "Compose stack started") {
