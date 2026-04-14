@@ -1,0 +1,24 @@
+name: Release Artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-release-artifacts:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build release app bundles
+        run: make app
+
+      - name: Upload app bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: devstackmenu-app-bundles
+          path: dist/

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security reports
+    url: https://github.com/Mesteriis/dev-stack/security/policy
+    about: Use the private security reporting path described in SECURITY.md.
