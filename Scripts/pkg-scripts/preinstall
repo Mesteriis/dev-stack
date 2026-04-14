@@ -4,6 +4,7 @@ set -eu
 DEVSTACK_APP="/Applications/DevStackMenu.app"
 IMPORTER_APP="/Applications/Import Compose To DX.app"
 DX_BINARY="/usr/local/bin/dx"
+LAUNCH_AGENT_FILE="/Library/LaunchAgents/local.devstackmenu.autostart.plist"
 STATE_DIR="/private/tmp/devstackmenu-installer"
 POLICY_FILE="$STATE_DIR/policy"
 BACKUP_DIR="$STATE_DIR/backup"
@@ -127,6 +128,7 @@ has_existing_installation=0
 [ -e "$DEVSTACK_APP" ] && has_existing_installation=1
 [ -e "$IMPORTER_APP" ] && has_existing_installation=1
 [ -e "$DX_BINARY" ] && has_existing_installation=1
+[ -e "$LAUNCH_AGENT_FILE" ] && has_existing_installation=1
 
 ensure_state_dir
 
@@ -139,6 +141,7 @@ echo "Existing DevStack installation detected."
 echo " - $DEVSTACK_APP: $(path_present "$DEVSTACK_APP")"
 echo " - $IMPORTER_APP: $(path_present "$IMPORTER_APP")"
 echo " - $DX_BINARY: $(path_present "$DX_BINARY")"
+echo " - $LAUNCH_AGENT_FILE: $(path_present "$LAUNCH_AGENT_FILE")"
 
 choice="$(resolve_choice)"
 printf '%s\n' "$choice" > "$POLICY_FILE"
@@ -148,12 +151,14 @@ case "$choice" in
     [ -d "$DEVSTACK_APP" ] && rm -rf "$DEVSTACK_APP"
     [ -d "$IMPORTER_APP" ] && rm -rf "$IMPORTER_APP"
     [ -e "$DX_BINARY" ] && rm -f "$DX_BINARY"
+    [ -e "$LAUNCH_AGENT_FILE" ] && rm -f "$LAUNCH_AGENT_FILE"
     echo "Replacing existing DevStack installation."
     ;;
   keep)
     backup_path_if_present "$DEVSTACK_APP" "DevStackMenu.app"
     backup_path_if_present "$IMPORTER_APP" "Import Compose To DX.app"
     backup_path_if_present "$DX_BINARY" "dx"
+    backup_path_if_present "$LAUNCH_AGENT_FILE" "local.devstackmenu.autostart.plist"
     echo "Keeping existing DevStack installation unchanged."
     ;;
   abort)

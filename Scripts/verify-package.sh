@@ -24,6 +24,7 @@ pkgutil --payload-files "$PACKAGE_PATH" | sort > "$PAYLOAD_LIST"
 for REQUIRED in \
   "./Applications/DevStackMenu.app" \
   "./Applications/Import Compose To DX.app" \
+  "./Library/LaunchAgents/local.devstackmenu.autostart.plist" \
   "./usr/local/bin/dx"
 do
   if ! grep -Fxq "$REQUIRED" "$PAYLOAD_LIST"; then

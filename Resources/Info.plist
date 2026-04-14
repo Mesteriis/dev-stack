@@ -6,6 +6,8 @@
   <string>DevStackMenu</string>
   <key>CFBundleExecutable</key>
   <string>DevStackMenu</string>
+  <key>CFBundleIconFile</key>
+  <string>DevStackMenu.icns</string>
   <key>CFBundleDocumentTypes</key>
   <array>
     <dict>

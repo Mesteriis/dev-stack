@@ -72,6 +72,11 @@ if [ ! -d "/Applications/Import Compose To DX.app" ]; then
   exit 1
 fi
 
+if [ ! -f "/Library/LaunchAgents/local.devstackmenu.autostart.plist" ]; then
+  echo "LaunchAgent missing in /Library/LaunchAgents" >&2
+  exit 1
+fi
+
 if /usr/local/bin/dx status >"$TMP_DX_STATUS" 2>"$TMP_DX_STATUS_ERR"; then
   printf 'dx status: '
   cat "$TMP_DX_STATUS"
@@ -90,4 +95,4 @@ else
 fi
 
 printf '\nSmoke install passed.\n'
-printf 'To clean artifacts: sudo rm -rf /Applications/DevStackMenu.app /Applications/Import\\ Compose\\ To\\ DX.app /usr/local/bin/dx\n'
+printf 'To clean artifacts: sudo rm -rf /Applications/DevStackMenu.app /Applications/Import\\ Compose\\ To\\ DX.app /usr/local/bin/dx /Library/LaunchAgents/local.devstackmenu.autostart.plist\n'

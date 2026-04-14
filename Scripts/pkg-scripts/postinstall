@@ -4,6 +4,8 @@ set -eu
 DEVSTACK_APP="/Applications/DevStackMenu.app"
 IMPORTER_APP="/Applications/Import Compose To DX.app"
 DX_BINARY="/usr/local/bin/dx"
+LAUNCH_AGENT_FILE="/Library/LaunchAgents/local.devstackmenu.autostart.plist"
+LAUNCH_AGENT_LABEL="local.devstackmenu.autostart"
 STATE_DIR="/private/tmp/devstackmenu-installer"
 POLICY_FILE="$STATE_DIR/policy"
 BACKUP_DIR="$STATE_DIR/backup"
@@ -41,6 +43,7 @@ if [ "$policy" = "keep" ]; then
   restore_or_remove "$DEVSTACK_APP" "$BACKUP_DIR/DevStackMenu.app"
   restore_or_remove "$IMPORTER_APP" "$BACKUP_DIR/Import Compose To DX.app"
   restore_or_remove "$DX_BINARY" "$BACKUP_DIR/dx"
+  restore_or_remove "$LAUNCH_AGENT_FILE" "$BACKUP_DIR/local.devstackmenu.autostart.plist"
   cleanup_state
   echo "Existing DevStack installation kept unchanged."
   exit 0
@@ -73,6 +76,34 @@ rm -f "$DX_STATUS_OUTPUT"
 if ! "$DX_BINARY" status >/dev/null 2>&1; then
   echo "Installation failed: /usr/local/bin/dx is not executable" >&2
   exit 1
+fi
+
+if [ ! -f "$LAUNCH_AGENT_FILE" ]; then
+  echo "Installation failed: $LAUNCH_AGENT_FILE is not installed" >&2
+  exit 1
+fi
+
+chown root:wheel "$LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+chmod 644 "$LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+
+console_user="$(stat -f %Su /dev/console 2>/dev/null || printf '%s' root)"
+console_uid=""
+if [ -n "$console_user" ] && [ "$console_user" != "root" ] && [ "$console_user" != "loginwindow" ]; then
+  console_uid="$(id -u "$console_user" 2>/dev/null || true)"
+fi
+
+if [ -n "$console_uid" ]; then
+  launchctl bootout "gui/$console_uid/$LAUNCH_AGENT_LABEL" >/dev/null 2>&1 || \
+    launchctl bootout "gui/$console_uid" "$LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+
+  if launchctl bootstrap "gui/$console_uid" "$LAUNCH_AGENT_FILE" >/dev/null 2>&1; then
+    echo "DevStackMenu will launch at login and has been started for $console_user."
+  else
+    launchctl asuser "$console_uid" /usr/bin/open -gj "$DEVSTACK_APP" >/dev/null 2>&1 || true
+    echo "DevStackMenu launch agent installed; immediate start will occur on the next login for $console_user."
+  fi
+else
+  echo "DevStackMenu launch agent installed; immediate start skipped because no console user session was detected."
 fi
 
 echo "/usr/local/bin/dx installed and executable."
