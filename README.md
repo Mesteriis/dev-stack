@@ -1,9 +1,27 @@
 # DevStackMenu
 
-[![CI](https://github.com/Mesteriis/dev-stack/actions/workflows/ci.yml/badge.svg)](https://github.com/Mesteriis/dev-stack/actions/workflows/ci.yml)
-[![Release Artifacts](https://github.com/Mesteriis/dev-stack/actions/workflows/release.yml/badge.svg)](https://github.com/Mesteriis/dev-stack/actions/workflows/release.yml)
+<p align="center">
+  <a href="https://github.com/Mesteriis/dev-stack/actions/workflows/ci.yml"><img src="https://github.com/Mesteriis/dev-stack/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/Mesteriis/dev-stack/actions/workflows/docs.yml"><img src="https://github.com/Mesteriis/dev-stack/actions/workflows/docs.yml/badge.svg" alt="Docs" /></a>
+  <a href="https://github.com/Mesteriis/dev-stack/actions/workflows/release.yml"><img src="https://github.com/Mesteriis/dev-stack/actions/workflows/release.yml/badge.svg" alt="Release Artifacts" /></a>
+  <a href="https://github.com/Mesteriis/dev-stack/releases"><img src="https://img.shields.io/github/v/release/Mesteriis/dev-stack?display_name=tag" alt="Latest Release" /></a>
+  <a href="#requirements"><img src="https://img.shields.io/badge/macOS-13%2B-111827?logo=apple&logoColor=white" alt="macOS 13+" /></a>
+  <a href="#requirements"><img src="https://img.shields.io/badge/Swift-6-F97316?logo=swift&logoColor=white" alt="Swift 6" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2563EB.svg" alt="MIT License" /></a>
+  <a href="#cli"><img src="https://img.shields.io/badge/CLI-dx-0F766E" alt="dx CLI" /></a>
+</p>
 
-<a href="https://www.buymeacoffee.com/mesteriis"><img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=&slug=mesteriis&button_colour=BD5FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00" alt="Buy Me a Coffee" /></a>
+<p align="center">
+  <img src="docs/img/logo.png" width="260" alt="DevStackMenu logo" />
+</p>
+
+<p align="center">
+  <strong>Self-contained macOS menu bar control plane for Docker runtimes, compose stacks, shared env state and project-local dev workflows.</strong>
+</p>
+
+<p align="center">
+  <a href="https://www.buymeacoffee.com/mesteriis"><img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=&slug=mesteriis&button_colour=BD5FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00" alt="Buy Me a Coffee" /></a>
+</p>
 
 DevStackMenu is a self-contained macOS menu bar app for managing remote Docker access, compose stacks, shared developer variables and stable developer endpoints from one native AppKit UI.
 
