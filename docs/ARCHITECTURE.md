@@ -114,6 +114,8 @@ Owns editor/import window coordination and profile persistence callbacks.
 - `VariableManager/VariableManagerDataService.swift`: import/suggested profile support for variable sync
 - `VariableManager/VariableManagerDialogs.swift`: add/edit/import modal dialogs
 - `SecretManager.swift`: profile secret manager
+- `SecretManager/SecretManagerDataService.swift`: secret overview/load/save/delete service methods
+- `SecretManager/SecretManagerDialogs.swift`: secret save value dialog
 
 ### CLI And Executables
 

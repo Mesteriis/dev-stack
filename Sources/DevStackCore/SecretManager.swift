@@ -84,37 +84,14 @@ final class SecretManagerWindowController: NSWindowController, NSTableViewDataSo
             return
         }
 
-        let keyField = NSTextField(string: entry.key)
-        keyField.isEditable = false
-        let valueField = NSSecureTextField()
-
-        let accessory = NSStackView()
-        accessory.orientation = .vertical
-        accessory.alignment = .leading
-        accessory.spacing = 8
-
-        let info = NSTextField(wrappingLabelWithString: "Save a profile-scoped Keychain value for \(entry.key). Env files still take precedence if they already define this key.")
-        info.maximumNumberOfLines = 3
-        info.textColor = .secondaryLabelColor
-        accessory.addArrangedSubview(info)
-        accessory.addArrangedSubview(formRow(label: "Key", field: keyField))
-        accessory.addArrangedSubview(formRow(label: "Value", field: valueField))
-
-        let alert = NSAlert()
-        alert.messageText = "Save Secret"
-        alert.informativeText = "The value is stored in Keychain service devstackmenu.\(slugify(profile.name))."
-        alert.accessoryView = accessory
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-
-        guard alert.runModal() == .alertFirstButtonReturn else {
+        guard let value = SecretManagerDialogs.runSaveValueModal(entry: entry, profileName: profile.name) else {
             return
         }
 
         do {
-            try ComposeSupport.saveProfileSecret(
+            try SecretManagerDataService.saveProfileSecret(
                 key: entry.key,
-                value: valueField.stringValue,
+                value: value,
                 profile: profile
             )
             reloadOverview(message: "Secret '\(entry.key)' saved in Keychain")
@@ -141,7 +118,7 @@ final class SecretManagerWindowController: NSWindowController, NSTableViewDataSo
         }
 
         do {
-            try ComposeSupport.deleteProfileSecret(key: entry.key, profile: profile)
+            try SecretManagerDataService.deleteProfileSecret(key: entry.key, profile: profile)
             reloadOverview(message: "Secret '\(entry.key)' removed from profile Keychain")
         } catch {
             presentError(error.localizedDescription)
@@ -247,14 +224,9 @@ final class SecretManagerWindowController: NSWindowController, NSTableViewDataSo
 
     private func reloadOverview(message: String? = nil) {
         do {
-            let overview = try ComposeSupport.secretOverview(profile: profile, store: store)
+            let overview = try SecretManagerDataService.secretOverview(profile: profile, store: store)
             self.overview = overview
-            let summary = [
-                "Working directory: \(overview.workingDirectory.path)",
-                "Env files: \(overview.environmentFiles.isEmpty ? "none" : overview.environmentFiles.map(\.lastPathComponent).joined(separator: ", "))",
-                "Referenced keys: \(overview.referencedKeys.isEmpty ? "none" : String(overview.referencedKeys.count))",
-                "Keychain service: \(overview.profileServiceName)",
-            ]
+            let summary = SecretManagerDataService.summaryLines(overview: overview)
             summaryField.stringValue = ([message].compactMap { $0 } + [summary.joined(separator: "\n")]).joined(separator: "\n\n")
         } catch {
             overview = nil
@@ -271,18 +243,6 @@ final class SecretManagerWindowController: NSWindowController, NSTableViewDataSo
         alert.informativeText = message
         alert.addButton(withTitle: "OK")
         alert.beginSheetModal(for: window ?? NSWindow(), completionHandler: nil)
-    }
-
-    private func formRow(label text: String, field: NSView) -> NSView {
-        let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
-        label.alignment = .right
-        field.translatesAutoresizingMaskIntoConstraints = false
-
-        let grid = NSGridView(views: [[label, field]])
-        grid.column(at: 0).width = 80
-        grid.columnSpacing = 12
-        return grid
     }
 
     private func button(title: String, action: Selector) -> NSButton {
