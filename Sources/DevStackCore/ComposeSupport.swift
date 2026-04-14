@@ -1118,7 +1118,7 @@ package enum ComposeSupport {
 
             let shortRange = NSRange(entryLine.startIndex..<entryLine.endIndex, in: entryLine)
             if let shortMatch = shortPortRegex.firstMatch(in: entryLine, range: shortRange),
-               let publishedRange = Range(shortMatch.range(at: 2), in: entryLine),
+               let publishedRange = Range(shortMatch.range(at: 1), in: entryLine),
                let publishedPort = Int(entryLine[publishedRange]) {
                 discoveredPorts[currentService, default: []].append(publishedPort)
                 continue
