@@ -17,15 +17,21 @@ Do not bump `Resources/Info.plist` for ordinary maintenance, documentation sync 
 3. If this commit is a real release, bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`.
 4. Build release artifacts with `make package` (unsigned by default).
 5. Confirm package content and signature with `./Scripts/verify-package.sh dist/DevStackMenu-*.pkg 0` for unsigned path, or `1` when signing is mandatory.
-6. Sanity-check the generated package and confirm it installs with `sudo installer -pkg dist/DevStackMenu-*.pkg -target /`.
-7. Sanity-check generated apps in `/Applications` after install.
+6. Run a root-install smoke checklist with one command:
+
+```sh
+./Scripts/release-smoke-install.sh dist/DevStackMenu-*.pkg
+```
+
+It performs installer + pkgutil + post-install checks.
+7. Sanity-check generated apps in `/Applications` after install (script already validates this, including `/Applications/Import Compose To DX.app` and `/usr/local/bin/dx`).
 8. Verify the main app and compose-import helper use distinct bundle identifiers in the built artifacts.
 9. Verify single-instance behavior by launching the installed app twice and confirming the second launch exits while the original instance stays alive.
 10. If signing credentials are configured, run `workflow_dispatch` on Release Artifacts for signed/notarized output.
 
 ## GitHub Release Flow
 
-The repository includes a workflow that builds a `.pkg` artifact and uploads it for tagged releases or manual runs.
+The repository includes a workflow that builds a `.pkg` artifact, uploads it as a workflow artifact, and attaches it to the GitHub release for the tag on push/tag events.
 Signed/notarized output is optional and driven by workflow secrets.
 
 To enable signing/notarization on `workflow_dispatch`, configure:

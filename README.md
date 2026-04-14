@@ -62,10 +62,36 @@ make package
 make install-package
 ```
 
+For a real root-install smoke-check (installer + pkgutil + post-install checks), run one command:
+
+```sh
+./Scripts/release-smoke-install.sh dist/DevStackMenu-*.pkg
+```
+
+For signed artifacts:
+
+```sh
+./Scripts/release-smoke-install.sh --signed dist/DevStackMenu-*.pkg
+```
+
+The smoke script verifies:
+
+- package path resolution and signature policy
+- required payload entries (`./Applications/DevStackMenu.app`, `./Applications/Import Compose To DX.app`, `./usr/local/bin/dx`)
+- package installation through `sudo installer`
+- presence of installed artifacts in `/Applications` and `/usr/local/bin`
+- CLI entrypoint execution (`dx status`)
+
 The installer places:
 
 - `DevStackMenu.app` and `Import Compose To DX.app` into `/Applications`
 - `dx` into `/usr/local/bin`
+
+If `dx` is still not found in your shell after install, run:
+
+```sh
+export PATH="/usr/local/bin:$PATH"
+```
 
 This `.pkg` is the primary release artifact built by CI.
 
