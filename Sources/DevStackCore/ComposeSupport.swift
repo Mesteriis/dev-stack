@@ -990,15 +990,19 @@ package enum ComposeSupport {
     }
 
     private static func fallbackImportServices(from content: String) -> [ServiceDefinition] {
-        let pattern = #"(?:.+:)?(\d+):(\d+)(?:/\w+)?"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+        let shortPortPattern = #"(?:['\"]?[^'\":]+['\"]?:)?(\d+):(\d+)(?:/\w+)?"#
+        guard let shortPortRegex = try? NSRegularExpression(pattern: shortPortPattern) else {
             return []
         }
+        let targetRegex = #/^\s*target:\s*(\d+)\s*$/#
+        let publishedRegex = #/^\s*published:\s*(\d+)\s*$/#
 
         var currentService: String?
         var insideServices = false
         var servicesIndent = 0
         var serviceIndent = 0
+        var inPortsSection = false
+        var isCollectingLongPort = false
         var result: [ServiceDefinition] = []
         var discoveredPorts: [String: [Int]] = [:]
 
@@ -1019,27 +1023,79 @@ package enum ComposeSupport {
 
             if indent <= servicesIndent {
                 currentService = nil
+                inPortsSection = false
+                isCollectingLongPort = false
                 continue
             }
 
             if trimmed.hasSuffix(":") && !trimmed.hasPrefix("-") && indent == servicesIndent + 2 {
                 currentService = String(trimmed.dropLast()).trimmingCharacters(in: .whitespaces)
                 serviceIndent = indent
+                inPortsSection = false
+                isCollectingLongPort = false
                 continue
             }
 
-            guard let currentService, indent > serviceIndent, trimmed.hasPrefix("-") else {
+            guard let currentService else {
                 continue
             }
 
-            let range = NSRange(trimmed.startIndex..<trimmed.endIndex, in: trimmed)
-            guard let match = regex.firstMatch(in: trimmed, range: range),
-                  let publishedRange = Range(match.range(at: 1), in: trimmed),
-                  let publishedPort = Int(trimmed[publishedRange])
-            else {
+            if indent <= serviceIndent {
+                if !inPortsSection {
+                    continue
+                }
+
+                inPortsSection = false
+                isCollectingLongPort = false
                 continue
             }
-            discoveredPorts[currentService, default: []].append(publishedPort)
+
+            if trimmed == "ports:" {
+                inPortsSection = true
+                isCollectingLongPort = false
+                continue
+            }
+
+            if !inPortsSection {
+                continue
+            }
+
+            if !trimmed.hasPrefix("-") {
+                if !isCollectingLongPort {
+                    continue
+                }
+                if let publishedMatch = trimmed.firstMatch(of: publishedRegex)?.1,
+                   let published = Int(publishedMatch)
+                {
+                    discoveredPorts[currentService, default: []].append(published)
+                    isCollectingLongPort = false
+                }
+                continue
+            }
+
+            if isCollectingLongPort {
+                isCollectingLongPort = false
+            }
+
+            let entryLine = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            let shortRange = NSRange(entryLine.startIndex..<entryLine.endIndex, in: entryLine)
+            if let shortMatch = shortPortRegex.firstMatch(in: entryLine, range: shortRange),
+               let publishedRange = Range(shortMatch.range(at: 2), in: entryLine),
+               let publishedPort = Int(entryLine[publishedRange]) {
+                discoveredPorts[currentService, default: []].append(publishedPort)
+                continue
+            }
+
+            if let targetMatch = entryLine.firstMatch(of: targetRegex)?.1, Int(targetMatch) != nil {
+                isCollectingLongPort = true
+                continue
+            }
+
+            if let publishedMatch = entryLine.firstMatch(of: publishedRegex)?.1,
+               let publishedPort = Int(publishedMatch)
+            {
+                discoveredPorts[currentService, default: []].append(publishedPort)
+            }
         }
 
         for (serviceName, ports) in discoveredPorts.sorted(by: { $0.key < $1.key }) {
