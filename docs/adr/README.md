@@ -1,57 +1,52 @@
-# ADRs
+# ADR Process for DevStackMenu
 
-Architecture Decision Records capture changes that affect boundaries, contracts, or operational behavior.
+Use ADRs when a change changes one of these things:
 
-## When An ADR Is Required
+- architectural boundaries (feature, module, or file ownership)
+- public/runtime contracts (CLI, storage paths, profile/runtime formats)
+- dependency direction or ownership assumptions
+- test strategy for important behaviors
+- cross-target behavior
 
-Write an ADR when a change:
+No ADR is needed for:
 
-- moves responsibility between major files or subsystems
-- changes storage contracts, CLI surface, install/runtime paths, or compatibility rules
-- adds or removes a dependency between package areas or targets
-- changes compose/runtime orchestration behavior in a durable way
-- changes smoke/test placement or the verification strategy
+- pure refactors inside an existing boundary
+- renames, formatting, or moving code between files without semantic change
+- new tests for already-covered behavior
 
-## When An ADR Is Not Needed
+## Naming
 
-Do not write an ADR for:
+- Files use zero-padded 4-digit prefixes: `0000-*.md`.
+- `0000-index.md` is required and must be the first numbered file.
+- ADR files are append-only with short, stable filenames.
 
-- copy edits, comments, and renames with no boundary change
-- UI wording, icon, spacing, or other cosmetic AppKit tweaks
-- internal refactors that stay inside an already accepted boundary
-- bug fixes that restore intended behavior without changing design
+## Status
 
-## Naming Convention
+Use one of:
 
-- File names use `NNNN-kebab-case.md`
-- `0000-index.md` is the ADR index
-- Numbers are append-only and must stay contiguous
-- One ADR records one decision
+- `Proposed`
+- `Accepted`
+- `Superseded`
+- `Deprecated`
 
-## Status Model
+## ADR format
 
-- `Proposed`: drafted, not yet adopted
-- `Accepted`: current decision for the codebase
-- `Superseded`: replaced by a newer ADR
-- `Rejected`: considered and explicitly not adopted
+Each ADR includes:
 
-## Format
+- Title
+- Status
+- Date
+- Context
+- Decision
+- Consequences
+- Alternatives considered
+- Migration / Rollback
+- Supersedes / Superseded by
 
-Each ADR should stay short and include:
+`Date` is `YYYY-MM-DD`.
 
-- `Title`
-- `Status`
-- `Date`
-- `Context`
-- `Decision`
-- `Consequences`
-- `Alternatives considered`
-- `Migration / Rollback`
-- `Supersedes / Superseded by`
+## Process
 
-## Workflow
-
-1. Copy `template.md`
-2. Pick the next sequential number
-3. Update `0000-index.md`
-4. Run `Scripts/check-adr.sh`
+- Add a new ADR when scope drift is real and cross-cutting.
+- Add it to `0000-index.md` immediately.
+- Keep `Scripts/check-adr.sh` passing before merging.
