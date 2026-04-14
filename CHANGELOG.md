@@ -6,6 +6,23 @@ The format is inspired by Keep a Changelog, and the project follows a pragmatic 
 
 ## [Unreleased]
 
+## [0.1.4]
+
+### Added
+
+- Architectural boundary pass 1 completed: split `Common`, `RuntimeController`, `ComposeSupport`, `AppDelegate`, smoke checks, and AI quota feature into focused internal boundaries.
+- ADR process expanded to mandatory lightweight governance with numbered decisions under `docs/adr/`.
+- `ProfileEditor` UI surface remains in a single controller and is now split across dedicated support extensions.
+
+### Changed
+
+- `AppActions` extracted compose preview confirmation flow from editor/report action codepaths.
+- `SmokeChecks` lives in executable target area (`Sources/DevStackSmokeTests`) while shipping core library keeps runtime surface minimal.
+
+### Fixed
+
+- No behavior changes for runtime commands; refactor keeps existing `make build`, `make test`, `make app`, `make check` contracts.
+
 ## [0.1.3]
 
 ### Fixed
