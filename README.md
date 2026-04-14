@@ -22,6 +22,20 @@ The project is functional, but still intentionally small and local-first. The re
 
 Repository: [`Mesteriis/dev-stack`](https://github.com/Mesteriis/dev-stack)
 
+## Screenshots
+
+The current menu structure is grouped around the workflows that matter during day-to-day dev work: status, the active profile, runtimes, variables and AI CLI limits.
+
+![DevStackMenu main menu with grouped navigation](docs/img/menu-overview.png)
+
+The status panel stays compact but still shows the active profile, runtime, git context, tunnel state, compose health and forwarded services.
+
+![DevStackMenu status panel with runtime and compose summary](docs/img/status-panel.png)
+
+Profile actions stay close to the active profile itself: compose lifecycle, logs, secrets, env files, project folders and profile editing are all in one submenu.
+
+![DevStackMenu current profile submenu with compose actions and project shortcuts](docs/img/profile-actions.png)
+
 ## Requirements
 
 - macOS 13 or newer
