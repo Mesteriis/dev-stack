@@ -1,6 +1,96 @@
 #!/bin/sh
 set -eu
 
-if [ -e /usr/local/bin/dx ]; then
-  rm -f /usr/local/bin/dx
+DEVSTACK_APP="/Applications/DevStackMenu.app"
+IMPORTER_APP="/Applications/Import Compose To DX.app"
+DX_BINARY="/usr/local/bin/dx"
+
+HAVE_EXISTING=0
+[ -d "$DEVSTACK_APP" ] && HAVE_EXISTING=1
+[ -d "$IMPORTER_APP" ] && HAVE_EXISTING=1
+[ -e "$DX_BINARY" ] && HAVE_EXISTING=1
+
+if [ "$HAVE_EXISTING" -eq 0 ]; then
+  exit 0
 fi
+
+DEVSTACK_VERSION="unknown"
+if [ -f "$DEVSTACK_APP/Contents/Info.plist" ]; then
+  DEVSTACK_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$DEVSTACK_APP/Contents/Info.plist" 2>/dev/null || true)"
+  DEVSTACK_VERSION="${DEVSTACK_VERSION:-unknown}"
+fi
+
+DX_VERSION="unknown"
+if [ -f "$DX_BINARY" ]; then
+  if DX_HELPER_OUTPUT="$("$DX_BINARY" --version 2>/dev/null || true)"; then
+    DX_VERSION="$DX_HELPER_OUTPUT"
+  else
+    DX_VERSION="installed"
+  fi
+fi
+
+echo "Existing DevStack installation detected."
+echo " - $DEVSTACK_APP (version: $DEVSTACK_VERSION)"
+echo " - $IMPORTER_APP (installed: $([ -d \"$IMPORTER_APP\" ] && echo yes || echo no))"
+echo " - $DX_BINARY (installed: $([ -e \"$DX_BINARY\" ] && echo yes || echo no), version: $DX_VERSION)"
+echo
+
+if [ "${DEVSTACK_INSTALL_EXISTING_POLICY:-}" = "remove" ]; then
+  CHOICE="remove"
+elif [ "${DEVSTACK_INSTALL_EXISTING_POLICY:-}" = "keep" ] || [ "${DEVSTACK_INSTALL_EXISTING_POLICY:-}" = "skip" ]; then
+  CHOICE="keep"
+elif [ "${DEVSTACK_INSTALL_EXISTING_POLICY:-}" = "abort" ]; then
+  CHOICE="abort"
+else
+  CHOICE=""
+fi
+
+if [ -z "$CHOICE" ] && [ ! -t 0 ]; then
+  echo "Non-interactive install: keeping existing installation and cancelling package install."
+  echo "Re-run with DEVSTACK_INSTALL_EXISTING_POLICY=remove to replace existing installation."
+  exit 1
+fi
+
+if [ -z "$CHOICE" ] && [ -r /dev/tty ]; then
+  while true; do
+    printf "Choose action: [r] Remove existing and install / [k] Keep existing unchanged (cancel install) / [a] Abort: "
+    if ! IFS= read -r CHOICE </dev/tty; then
+      echo "Could not read decision. Cancelling install." >&2
+      exit 1
+    fi
+    case "$CHOICE" in
+      r|R)
+        CHOICE="remove"
+        break
+        ;;
+      k|K)
+        CHOICE="keep"
+        break
+        ;;
+      a|A)
+        CHOICE="abort"
+        break
+        ;;
+      *)
+        echo "Invalid choice: $CHOICE"
+        ;;
+    esac
+  done
+fi
+
+case "$CHOICE" in
+  remove)
+    [ -d "$DEVSTACK_APP" ] && rm -rf "$DEVSTACK_APP"
+    [ -d "$IMPORTER_APP" ] && rm -rf "$IMPORTER_APP"
+    [ -e "$DX_BINARY" ] && rm -f "$DX_BINARY"
+    echo "Existing DevStack files removed. Continuing with installation."
+    ;;
+  keep|abort|"")
+    echo "Keeping existing installation. Cancelling package installation."
+    exit 1
+    ;;
+  *)
+    echo "Invalid policy '$CHOICE'. Cancelling installation."
+    exit 1
+    ;;
+esac

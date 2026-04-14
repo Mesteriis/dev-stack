@@ -87,6 +87,20 @@ The installer places:
 - `DevStackMenu.app` and `Import Compose To DX.app` into `/Applications`
 - `dx` into `/usr/local/bin`
 
+If an existing DevStack installation is found, the installer will ask whether to remove it before installing:
+
+- `remove` existing files and continue installation
+- `keep` existing installation and cancel install
+- `abort` install
+
+For non-interactive installs in CI or scripts, set:
+
+```sh
+export DEVSTACK_INSTALL_EXISTING_POLICY=remove
+```
+
+to replace existing files automatically, or leave it unset to keep existing installation and cancel the install.
+
 If installation succeeds, `dx` is available at `/usr/local/bin/dx` and should run immediately in a new shell.
 If an existing shell still does not resolve `dx` (rare `zsh` command cache case), reopen the shell or run:
 
