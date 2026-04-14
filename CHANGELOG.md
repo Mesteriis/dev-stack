@@ -6,6 +6,20 @@ The format is inspired by Keep a Changelog, and the project follows a pragmatic 
 
 ## [Unreleased]
 
+## [0.1.3]
+
+### Fixed
+
+- generated compose files now render as YAML instead of JSON, which fixes `docker compose` parse failures on generated profile files
+- `dx up` and `dx down` now invoke the real compose runtime actions instead of only toggling profile activation state
+- downloaded release package instructions now use a working macOS quarantine-removal command and a robust package selection command
+- GitHub Pages deployment is now configured from the repository workflow and no longer depends on manual one-time Pages setup
+
+### Verified
+
+- compose generation was re-checked against `/Users/avm/projects/Work/ecos/state-corp-backend/docker-compose.service.yml`
+- regenerated `~/Library/Application Support/DevStackMenu/generated/state-corp-backend/docker-compose.generated.yml` now passes `docker compose -f ... config`
+
 ### Added
 
 - Release packaging now ships as `.pkg` (apps + `dx`) and is validated in CI by payload/signature checks.
