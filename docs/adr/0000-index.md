@@ -21,6 +21,7 @@ Current ADRs:
 - [0005 AI Quota Feature Boundary](0005-ai-quota-feature-boundary.md)
 - [0006 Smoke Verification Placement](0006-smoke-verification-placement.md)
 - [0007 Profile Editor Boundaries Pass 2](0007-profile-editor-boundaries-pass-2.md)
+- [0008 Target Boundary Deferral](0008-target-boundary-deferral.md)
 
 ## Consequences
 
