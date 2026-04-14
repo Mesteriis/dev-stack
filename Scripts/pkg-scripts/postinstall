@@ -6,7 +6,7 @@ if [ ! -x /usr/local/bin/dx ]; then
   exit 1
 fi
 
-if ! /usr/local/bin/dx --help >/dev/null 2>&1; then
+if ! /usr/local/bin/dx status >/dev/null 2>&1; then
   echo "Installation failed: /usr/local/bin/dx is not executable" >&2
   exit 1
 fi
