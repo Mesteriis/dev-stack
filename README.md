@@ -74,6 +74,12 @@ For signed artifacts:
 ./Scripts/release-smoke-install.sh --signed dist/DevStackMenu-*.pkg
 ```
 
+If you download a release `.pkg` from GitHub instead of building locally, note the current distribution status:
+
+- local `dist/` exists only in your working copy or CI workspace after `make package`
+- GitHub Release assets are separate downloaded files and do not appear in your local `dist/`
+- unsigned / non-notarized downloaded packages can be blocked by Gatekeeper on macOS
+
 The smoke script verifies:
 
 - package path resolution and signature policy
@@ -109,6 +115,28 @@ rehash
 ```
 
 This `.pkg` is the primary release artifact built by CI.
+
+## Downloaded Release Packages
+
+If macOS blocks an already-downloaded release package with "Apple could not verify it", the package is not notarized yet.
+
+If you trust the release and want to install it manually, remove the quarantine attribute and open it again:
+
+```sh
+PKG="$(ls -1t ~/Downloads/DevStackMenu-*.pkg | head -n 1)"
+xattr -dr com.apple.quarantine "$PKG"
+open "$PKG"
+```
+
+Or install directly without Finder:
+
+```sh
+PKG="$(ls -1t ~/Downloads/DevStackMenu-*.pkg | head -n 1)"
+xattr -dr com.apple.quarantine "$PKG"
+sudo installer -pkg "$PKG" -target /
+```
+
+If you want Gatekeeper-friendly installs without removing quarantine manually, the release must be signed with Developer ID Installer and notarized. The repository already contains the pipeline hooks for that in `Scripts/sign-notarize-package.sh` and `.github/workflows/release.yml`; it only needs the Apple signing/notarization secrets configured.
 
 ## What It Does
 

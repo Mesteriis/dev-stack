@@ -29,11 +29,13 @@ It performs installer + pkgutil + post-install checks.
 8. Verify the main app and compose-import helper use distinct bundle identifiers in the built artifacts.
 9. Verify single-instance behavior by launching the installed app twice and confirming the second launch exits while the original instance stays alive.
 10. If signing credentials are configured, run `workflow_dispatch` on Release Artifacts for signed/notarized output.
+11. If signing credentials are not configured, expect downloaded GitHub Release `.pkg` files to be blocked by Gatekeeper until the user removes `com.apple.quarantine` manually.
 
 ## GitHub Release Flow
 
 The repository includes a workflow that builds a `.pkg` artifact, uploads it as a workflow artifact, and attaches it to the GitHub release for the tag on push/tag events.
 Signed/notarized output is optional and driven by workflow secrets.
+Without these secrets, GitHub Release assets remain unsigned and non-notarized, which is acceptable for maintainer testing but not a polished public install flow.
 
 To enable signing/notarization on `workflow_dispatch`, configure:
 
@@ -54,3 +56,10 @@ v0.1.1
 
 - Artifacts are unsigned by default.
 - `make install-local` is a convenience for maintainers and local users; it is not a substitute for a signed distribution flow.
+- For a downloaded unsigned package, the current manual bypass is:
+
+```sh
+PKG="$(ls -1t ~/Downloads/DevStackMenu-*.pkg | head -n 1)"
+xattr -dr com.apple.quarantine "$PKG"
+sudo installer -pkg "$PKG" -target /
+```
