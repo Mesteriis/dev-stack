@@ -10,9 +10,13 @@ enum AILimitAlertManager {
         }
 
         let center = UNUserNotificationCenter.current()
-        let settings = await center.notificationSettings()
+        let authorizationStatus = await withCheckedContinuation { continuation in
+            center.getNotificationSettings { settings in
+                continuation.resume(returning: settings.authorizationStatus)
+            }
+        }
 
-        switch settings.authorizationStatus {
+        switch authorizationStatus {
         case .authorized, .provisional, .ephemeral:
             break
         case .notDetermined:

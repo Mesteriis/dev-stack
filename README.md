@@ -272,7 +272,7 @@ Repository layout:
 - [RELEASING.md](RELEASING.md)
 - [SUPPORT.md](SUPPORT.md)
 - [docs/index.md](docs/index.md) as the documentation hub
-- GitHub Docs workflow in [`.github/workflows/docs.yml`](/Users/avm/projects/Personal/DevSteck/.github/workflows/docs.yml)
+- GitHub Docs workflow in [`.github/workflows/docs.yml`](.github/workflows/docs.yml)
 
 ## Contributing
 
