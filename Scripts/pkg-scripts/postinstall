@@ -1,16 +1,62 @@
 #!/bin/sh
 set -eu
 
-if [ ! -x /usr/local/bin/dx ]; then
+DEVSTACK_APP="/Applications/DevStackMenu.app"
+IMPORTER_APP="/Applications/Import Compose To DX.app"
+DX_BINARY="/usr/local/bin/dx"
+STATE_DIR="/private/tmp/devstackmenu-installer"
+POLICY_FILE="$STATE_DIR/policy"
+BACKUP_DIR="$STATE_DIR/backup"
+
+cleanup_state() {
+  rm -rf "$STATE_DIR"
+}
+
+remove_path_if_present() {
+  target_path="$1"
+
+  if [ -d "$target_path" ]; then
+    rm -rf "$target_path"
+  elif [ -e "$target_path" ]; then
+    rm -f "$target_path"
+  fi
+}
+
+restore_or_remove() {
+  target_path="$1"
+  backup_path="$2"
+
+  remove_path_if_present "$target_path"
+  if [ -e "$backup_path" ]; then
+    /usr/bin/ditto "$backup_path" "$target_path"
+  fi
+}
+
+policy="install"
+if [ -f "$POLICY_FILE" ]; then
+  policy="$(cat "$POLICY_FILE")"
+fi
+
+if [ "$policy" = "keep" ]; then
+  restore_or_remove "$DEVSTACK_APP" "$BACKUP_DIR/DevStackMenu.app"
+  restore_or_remove "$IMPORTER_APP" "$BACKUP_DIR/Import Compose To DX.app"
+  restore_or_remove "$DX_BINARY" "$BACKUP_DIR/dx"
+  cleanup_state
+  echo "Existing DevStack installation kept unchanged."
+  exit 0
+fi
+
+cleanup_state
+
+if [ ! -x "$DX_BINARY" ]; then
   echo "Installation failed: /usr/local/bin/dx is not installed" >&2
   exit 1
 fi
 
-DX_BIN="/usr/local/bin/dx"
 DX_STATUS_OUTPUT="$(mktemp)"
 DX_EXIT_CODE=0
 
-if ! "$DX_BIN" >"$DX_STATUS_OUTPUT" 2>&1; then
+if ! "$DX_BINARY" >"$DX_STATUS_OUTPUT" 2>&1; then
   DX_EXIT_CODE=$?
 fi
 
@@ -24,7 +70,7 @@ fi
 
 rm -f "$DX_STATUS_OUTPUT"
 
-if ! "$DX_BIN" status >/dev/null 2>&1; then
+if ! "$DX_BINARY" status >/dev/null 2>&1; then
   echo "Installation failed: /usr/local/bin/dx is not executable" >&2
   exit 1
 fi

@@ -51,9 +51,9 @@ fi
 
 printf 'Installing package (requires sudo)...\n'
 if [ "$(id -u)" -eq 0 ]; then
-  installer -pkg "$PKG_PATH" -target / | tee "$TMP_LOG"
+  DEVSTACK_INSTALL_EXISTING_POLICY=remove installer -pkg "$PKG_PATH" -target / | tee "$TMP_LOG"
 else
-  sudo installer -pkg "$PKG_PATH" -target / | tee "$TMP_LOG"
+  sudo env DEVSTACK_INSTALL_EXISTING_POLICY=remove installer -pkg "$PKG_PATH" -target / | tee "$TMP_LOG"
 fi
 
 printf 'Verifying installed artifacts...\n'

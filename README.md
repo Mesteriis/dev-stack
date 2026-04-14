@@ -90,7 +90,7 @@ The installer places:
 If an existing DevStack installation is found, the installer will ask whether to remove it before installing:
 
 - `remove` existing files and continue installation
-- `keep` existing installation and cancel install
+- `keep` keep the current installation unchanged and complete without replacing it
 - `abort` install
 
 For non-interactive installs in CI or scripts, set:
@@ -99,7 +99,7 @@ For non-interactive installs in CI or scripts, set:
 export DEVSTACK_INSTALL_EXISTING_POLICY=remove
 ```
 
-to replace existing files automatically, or leave it unset to keep existing installation and cancel the install.
+to replace existing files automatically. Set it to `keep` to preserve the current installation without replacing it.
 
 If installation succeeds, `dx` is available at `/usr/local/bin/dx` and should run immediately in a new shell.
 If an existing shell still does not resolve `dx` (rare `zsh` command cache case), reopen the shell or run:

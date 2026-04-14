@@ -4,93 +4,164 @@ set -eu
 DEVSTACK_APP="/Applications/DevStackMenu.app"
 IMPORTER_APP="/Applications/Import Compose To DX.app"
 DX_BINARY="/usr/local/bin/dx"
+STATE_DIR="/private/tmp/devstackmenu-installer"
+POLICY_FILE="$STATE_DIR/policy"
+BACKUP_DIR="$STATE_DIR/backup"
 
-HAVE_EXISTING=0
-[ -d "$DEVSTACK_APP" ] && HAVE_EXISTING=1
-[ -d "$IMPORTER_APP" ] && HAVE_EXISTING=1
-[ -e "$DX_BINARY" ] && HAVE_EXISTING=1
+ensure_state_dir() {
+  rm -rf "$STATE_DIR"
+  mkdir -p "$BACKUP_DIR"
+}
 
-if [ "$HAVE_EXISTING" -eq 0 ]; then
-  exit 0
-fi
-
-DEVSTACK_VERSION="unknown"
-if [ -f "$DEVSTACK_APP/Contents/Info.plist" ]; then
-  DEVSTACK_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$DEVSTACK_APP/Contents/Info.plist" 2>/dev/null || true)"
-  DEVSTACK_VERSION="${DEVSTACK_VERSION:-unknown}"
-fi
-
-DX_VERSION="unknown"
-if [ -f "$DX_BINARY" ]; then
-  if DX_HELPER_OUTPUT="$("$DX_BINARY" --version 2>/dev/null || true)"; then
-    DX_VERSION="$DX_HELPER_OUTPUT"
+path_present() {
+  if [ -e "$1" ]; then
+    printf 'yes'
   else
-    DX_VERSION="installed"
+    printf 'no'
   fi
-fi
+}
 
-echo "Existing DevStack installation detected."
-echo " - $DEVSTACK_APP (version: $DEVSTACK_VERSION)"
-echo " - $IMPORTER_APP (installed: $([ -d \"$IMPORTER_APP\" ] && echo yes || echo no))"
-echo " - $DX_BINARY (installed: $([ -e \"$DX_BINARY\" ] && echo yes || echo no), version: $DX_VERSION)"
-echo
-
-if [ "${DEVSTACK_INSTALL_EXISTING_POLICY:-}" = "remove" ]; then
-  CHOICE="remove"
-elif [ "${DEVSTACK_INSTALL_EXISTING_POLICY:-}" = "keep" ] || [ "${DEVSTACK_INSTALL_EXISTING_POLICY:-}" = "skip" ]; then
-  CHOICE="keep"
-elif [ "${DEVSTACK_INSTALL_EXISTING_POLICY:-}" = "abort" ]; then
-  CHOICE="abort"
-else
-  CHOICE=""
-fi
-
-if [ -z "$CHOICE" ] && [ ! -t 0 ]; then
-  echo "Non-interactive install: keeping existing installation and cancelling package install."
-  echo "Re-run with DEVSTACK_INSTALL_EXISTING_POLICY=remove to replace existing installation."
-  exit 1
-fi
-
-if [ -z "$CHOICE" ] && [ -r /dev/tty ]; then
+prompt_in_tty() {
   while true; do
-    printf "Choose action: [r] Remove existing and install / [k] Keep existing unchanged (cancel install) / [a] Abort: "
-    if ! IFS= read -r CHOICE </dev/tty; then
-      echo "Could not read decision. Cancelling install." >&2
-      exit 1
+    printf "Existing DevStack installation found. Choose action: [r] Replace / [k] Keep unchanged / [a] Abort: "
+    if ! IFS= read -r choice; then
+      printf 'abort\n'
+      return
     fi
-    case "$CHOICE" in
+
+    case "$choice" in
       r|R)
-        CHOICE="remove"
-        break
+        printf 'remove\n'
+        return
         ;;
       k|K)
-        CHOICE="keep"
-        break
+        printf 'keep\n'
+        return
         ;;
       a|A)
-        CHOICE="abort"
-        break
-        ;;
-      *)
-        echo "Invalid choice: $CHOICE"
+        printf 'abort\n'
+        return
         ;;
     esac
   done
+}
+
+prompt_in_gui() {
+  console_user="$(stat -f %Su /dev/console 2>/dev/null || printf '%s' root)"
+  if [ -z "$console_user" ] || [ "$console_user" = "root" ]; then
+    return 1
+  fi
+
+  console_uid="$(id -u "$console_user" 2>/dev/null || true)"
+  if [ -z "$console_uid" ]; then
+    return 1
+  fi
+
+  result="$(
+    /bin/launchctl asuser "$console_uid" /usr/bin/osascript \
+      -e 'button returned of (display dialog "Existing DevStack installation found.\n\nReplace it with this package or keep the current installation unchanged?" with title "DevStackMenu Installer" buttons {"Abort", "Keep", "Replace"} default button "Replace" cancel button "Abort" with icon caution)' \
+      2>/dev/null || true
+  )"
+
+  case "$result" in
+    Replace)
+      printf 'remove\n'
+      return
+      ;;
+    Keep)
+      printf 'keep\n'
+      return
+      ;;
+    *)
+      printf 'abort\n'
+      return
+      ;;
+  esac
+}
+
+resolve_choice() {
+  case "${DEVSTACK_INSTALL_EXISTING_POLICY:-}" in
+    remove)
+      printf 'remove\n'
+      return
+      ;;
+    keep|skip)
+      printf 'keep\n'
+      return
+      ;;
+    abort)
+      printf 'abort\n'
+      return
+      ;;
+    "")
+      ;;
+    *)
+      echo "Invalid DEVSTACK_INSTALL_EXISTING_POLICY: ${DEVSTACK_INSTALL_EXISTING_POLICY}" >&2
+      printf 'abort\n'
+      return
+      ;;
+  esac
+
+  if [ -t 0 ] && [ -t 1 ]; then
+    prompt_in_tty
+    return
+  fi
+
+  if prompt_in_gui; then
+    return
+  fi
+
+  printf 'abort\n'
+}
+
+backup_path_if_present() {
+  source_path="$1"
+  backup_name="$2"
+
+  if [ -e "$source_path" ]; then
+    /usr/bin/ditto "$source_path" "$BACKUP_DIR/$backup_name"
+  fi
+}
+
+has_existing_installation=0
+[ -e "$DEVSTACK_APP" ] && has_existing_installation=1
+[ -e "$IMPORTER_APP" ] && has_existing_installation=1
+[ -e "$DX_BINARY" ] && has_existing_installation=1
+
+ensure_state_dir
+
+if [ "$has_existing_installation" -eq 0 ]; then
+  printf 'install\n' > "$POLICY_FILE"
+  exit 0
 fi
 
-case "$CHOICE" in
+echo "Existing DevStack installation detected."
+echo " - $DEVSTACK_APP: $(path_present "$DEVSTACK_APP")"
+echo " - $IMPORTER_APP: $(path_present "$IMPORTER_APP")"
+echo " - $DX_BINARY: $(path_present "$DX_BINARY")"
+
+choice="$(resolve_choice)"
+printf '%s\n' "$choice" > "$POLICY_FILE"
+
+case "$choice" in
   remove)
     [ -d "$DEVSTACK_APP" ] && rm -rf "$DEVSTACK_APP"
     [ -d "$IMPORTER_APP" ] && rm -rf "$IMPORTER_APP"
     [ -e "$DX_BINARY" ] && rm -f "$DX_BINARY"
-    echo "Existing DevStack files removed. Continuing with installation."
+    echo "Replacing existing DevStack installation."
     ;;
-  keep|abort|"")
-    echo "Keeping existing installation. Cancelling package installation."
+  keep)
+    backup_path_if_present "$DEVSTACK_APP" "DevStackMenu.app"
+    backup_path_if_present "$IMPORTER_APP" "Import Compose To DX.app"
+    backup_path_if_present "$DX_BINARY" "dx"
+    echo "Keeping existing DevStack installation unchanged."
+    ;;
+  abort)
+    echo "Installation aborted by user."
     exit 1
     ;;
   *)
-    echo "Invalid policy '$CHOICE'. Cancelling installation."
+    echo "Unknown install policy: $choice" >&2
     exit 1
     ;;
 esac
