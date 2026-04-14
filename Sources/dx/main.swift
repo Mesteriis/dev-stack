@@ -1,4 +1,3 @@
-import AppKit
 import DevStackCore
 import Darwin
 import Foundation
@@ -223,7 +222,7 @@ private enum DXApplication {
         print("Unresolved env vars: \(unresolvedCount)")
 
         if try DXTerminal.confirm("Open DevStackMenu now?", defaultYes: false) {
-            focusApp()
+            DXAppBridge.openDevStackMenu()
         }
     }
 
@@ -387,27 +386,6 @@ private enum DXApplication {
                         || $0.lastPathComponent.localizedCaseInsensitiveContains("docker-compose"))
             }
             .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
-    }
-
-    private static func focusApp() {
-        if let running = NSRunningApplication.runningApplications(withBundleIdentifier: "local.devstackmenu.app").first {
-            running.activate(options: [.activateIgnoringOtherApps])
-            return
-        }
-
-        let appURL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Applications/DevStackMenu.app", isDirectory: true)
-        if FileManager.default.fileExists(atPath: appURL.path) {
-            let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = true
-            NSWorkspace.shared.openApplication(at: appURL, configuration: configuration, completionHandler: nil)
-            return
-        }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open", isDirectory: false)
-        process.arguments = ["-a", "DevStackMenu"]
-        try? process.run()
     }
 }
 
