@@ -85,6 +85,7 @@ if command -v dx >/dev/null 2>&1; then
 else
   printf 'dx is not on current PATH. Binary is at /usr/local/bin/dx\n'
   printf 'You can add it for this shell with: export PATH="/usr/local/bin:$PATH"\n'
+  printf 'In zsh, run `rehash` after install to refresh command cache.\n'
 fi
 
 printf '\nSmoke install passed.\n'
