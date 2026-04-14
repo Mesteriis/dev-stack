@@ -85,6 +85,7 @@ Phase 1 keeps one core target, but the code is now split by responsibility insid
 ### `Sources/DevStackCore/Features/AIQuota/`
 
 - `AIToolQuotaInspector.swift`
+- `AIToolQuotaInspectionService.swift`
 - `AIToolQuotaDataService.swift`
 - `AIToolQuotaModels.swift`
 - `AILimitAlertManager.swift`
