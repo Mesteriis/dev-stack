@@ -200,17 +200,25 @@ final class ServerWizardWindowController: NSWindowController, NSWindowDelegate {
         }
 
         do {
-            let draft = try buildServer()
+            let draft = try ServerWizardService.buildServer(from: .init(
+                name: nameField.stringValue,
+                transport: selectedTransport(),
+                dockerContext: dockerContextField.stringValue,
+                sshHost: sshHostField.stringValue,
+                sshPortText: sshPortField.stringValue,
+                sshUser: sshUserField.stringValue,
+                remoteDataRoot: remoteDataRootField.stringValue
+            ))
             let store = self.store
             let bootstrapIfNeeded = self.bootstrapCheckbox.state == .on
-            setSubmitting(true, message: initialProgressMessage(for: draft))
+            setSubmitting(true, message: ServerWizardService.initialProgressMessage(for: draft))
 
             Task {
                 let result = await Task.detached(priority: .userInitiated) { () -> Result<RemoteServerPreparationResult, Error> in
                     do {
                         return .success(
-                            try RuntimeController.prepareServer(
-                                server: draft,
+                            try ServerWizardService.prepareServer(
+                                draft,
                                 store: store,
                                 bootstrapIfNeeded: bootstrapIfNeeded
                             )
@@ -223,7 +231,11 @@ final class ServerWizardWindowController: NSWindowController, NSWindowDelegate {
                 switch result {
                 case let .success(prepared):
                     do {
-                        try self.store.saveRuntime(prepared.server, originalName: self.originalName)
+                        try ServerWizardService.savePreparedServer(
+                            prepared.server,
+                            originalName: self.originalName,
+                            store: self.store
+                        )
                         self.savedServer = prepared.server
                         self.modalResponse = .OK
                         self.statusLabel.stringValue = "Ready: \(prepared.server.connectionSummary) on \(prepared.remoteOS), Docker \(prepared.serverVersion)."
@@ -257,7 +269,7 @@ final class ServerWizardWindowController: NSWindowController, NSWindowDelegate {
         }
 
         do {
-            try store.deleteRuntime(named: originalName)
+            try ServerWizardService.deleteRuntime(named: originalName, store: store)
             savedServer = nil
             modalResponse = .cancel
             close()
@@ -271,23 +283,8 @@ final class ServerWizardWindowController: NSWindowController, NSWindowDelegate {
         close()
     }
 
-    private func buildServer() throws -> RemoteServerDefinition {
-        let transport = selectedTransport()
-        let port = Int(sshPortField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 22
-        return try RemoteServerDefinition(
-            name: nameField.stringValue,
-            transport: transport,
-            dockerContext: dockerContextField.stringValue,
-            sshHost: sshHostField.stringValue,
-            sshPort: port,
-            sshUser: sshUserField.stringValue,
-            remoteDataRoot: remoteDataRootField.stringValue
-        ).normalized()
-    }
-
     private func selectedTransport() -> RemoteServerTransport {
-        let selectedTitle = transportField.selectedItem?.title
-        return RemoteServerTransport.allCases.first(where: { $0.title == selectedTitle }) ?? .ssh
+        ServerWizardService.parseTransport(title: transportField.selectedItem?.title)
     }
 
     private func updateTransportUI() {
@@ -307,15 +304,6 @@ final class ServerWizardWindowController: NSWindowController, NSWindowDelegate {
         transportDescription.stringValue = transport.summary
         if dockerContextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             dockerContextField.stringValue = transport == .local ? suggestedDockerContext : "srv-\(slugify(nameField.stringValue))"
-        }
-    }
-
-    private func initialProgressMessage(for server: RemoteServerDefinition) -> String {
-        switch server.transport {
-        case .local:
-            return "Checking local Docker context \(server.dockerContext)…"
-        case .ssh:
-            return "Checking \(server.remoteDockerServerDisplay) and preparing runtime context \(server.dockerContext)…"
         }
     }
 
