@@ -141,17 +141,9 @@ private enum DXApplication {
             let (resolvedProfile, overview) = try DXWorkflowService.environmentOverview(store: store, profileName: profile)
             print(DXWorkflowService.formatEnvironmentCheck(profileName: resolvedProfile.name, overview: overview))
         case .up:
-            guard let activeProfile = store.currentProfileName() else {
-                throw DXCLIError("No active profile. Use `dx use profile <name>` first.")
-            }
-            try RuntimeController.activateProfile(named: activeProfile, store: store)
-            print(DXWorkflowService.formatStatus(try DXWorkflowService.status(store: store)))
+            print(DXWorkflowService.formatStatus(try DXWorkflowService.up(store: store)))
         case .down:
-            guard let activeProfile = store.currentProfileName() else {
-                throw DXCLIError("No active profile. Use `dx use profile <name>` first.")
-            }
-            try RuntimeController.stopProfile(named: activeProfile, store: store)
-            print(DXWorkflowService.formatStatus(try DXWorkflowService.status(store: store)))
+            print(DXWorkflowService.formatStatus(try DXWorkflowService.down(store: store)))
         }
     }
 

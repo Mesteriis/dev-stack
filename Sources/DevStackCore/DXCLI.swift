@@ -192,6 +192,38 @@ package enum DXWorkflowService {
         )
     }
 
+    package static func up(
+        store: ProfileStore,
+        start: (String, ProfileStore) throws -> Void = { profileName, store in
+            try RuntimeController.composeUp(profileName: profileName, store: store)
+        },
+        snapshotProvider: (ProfileStore, String) throws -> AppSnapshot = { store, profileName in
+            try RuntimeController.statusSnapshot(store: store, profileName: profileName)
+        }
+    ) throws -> DXStatusReport {
+        guard let activeProfile = store.currentProfileName() else {
+            throw DXCLIError("No active profile. Use `dx use profile <name>` first.")
+        }
+        try start(activeProfile, store)
+        return try status(store: store, snapshotProvider: snapshotProvider)
+    }
+
+    package static func down(
+        store: ProfileStore,
+        stop: (String, ProfileStore) throws -> Void = { profileName, store in
+            try RuntimeController.composeDown(profileName: profileName, store: store)
+        },
+        snapshotProvider: (ProfileStore, String) throws -> AppSnapshot = { store, profileName in
+            try RuntimeController.statusSnapshot(store: store, profileName: profileName)
+        }
+    ) throws -> DXStatusReport {
+        guard let activeProfile = store.currentProfileName() else {
+            throw DXCLIError("No active profile. Use `dx use profile <name>` first.")
+        }
+        try stop(activeProfile, store)
+        return try status(store: store, snapshotProvider: snapshotProvider)
+    }
+
     package static func environmentOverview(
         store: ProfileStore,
         profileName: String?

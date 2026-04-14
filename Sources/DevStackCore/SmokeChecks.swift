@@ -25,6 +25,8 @@ package enum DevStackSmokeChecks {
         try testDXCommandParsing()
         try testProfileImportDraftWiring()
         try testDXUseProfileWiring()
+        try testDXUpWiring()
+        try testDXDownWiring()
         try testDXEnvCheckFormatting()
         try testUUIDGenerators()
         try testMissingEnvironmentDetection()
@@ -32,6 +34,7 @@ package enum DevStackSmokeChecks {
         try testProfileStoreUsesProjectDataDirectory()
         try testProfileStoreReturnsComposeSourceURLsInOrder()
         try testProfileNormalizationRejectsDuplicateLocalPorts()
+        try testGeneratedComposeYAMLSerialization()
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
@@ -545,6 +548,98 @@ package enum DevStackSmokeChecks {
         try expect(report.activeProfileName == "demo", "dx use profile should report the selected profile")
     }
 
+    private static func testDXUpWiring() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = ProfileStore(
+            rootDirectory: root.appendingPathComponent("state", isDirectory: true),
+            logsDirectory: root.appendingPathComponent("logs", isDirectory: true),
+            launchAgentsDirectory: root.appendingPathComponent("agents", isDirectory: true)
+        )
+        try store.ensureRuntimeDirectories()
+        try store.saveProfile(
+            try ProfileDefinition(name: "demo", serverName: "", dockerContext: "default", tunnelHost: "docker").normalized(),
+            originalName: nil
+        )
+        try store.saveCurrentProfile("demo")
+
+        var startedProfile: String?
+        let report = try DXWorkflowService.up(
+            store: store,
+            start: { profileName, _ in
+                startedProfile = profileName
+            },
+            snapshotProvider: { _, profileName in
+                try expect(profileName == "demo", "dx up should ask for status of the active profile")
+                return AppSnapshot(
+                    profile: profileName,
+                    configuredDockerContext: "default",
+                    activeDockerContext: "default",
+                    tunnelLoaded: true,
+                    tunnelLabel: "local.devstackmenu.demo",
+                    compose: ComposeRuntimeSnapshot(
+                        configured: true,
+                        projectName: "demo",
+                        workingDirectory: "/tmp/demo",
+                        autoDownOnSwitch: false,
+                        autoUpOnActivate: false,
+                        runningServices: [
+                            ComposeRuntimeService(Name: nil, Service: "db", State: "running", Status: "running"),
+                        ]
+                    ),
+                    services: []
+                )
+            }
+        )
+
+        try expect(startedProfile == "demo", "dx up should invoke compose-up logic for the active profile")
+        try expect(report.activeProfileName == "demo", "dx up should report the active profile")
+    }
+
+    private static func testDXDownWiring() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = ProfileStore(
+            rootDirectory: root.appendingPathComponent("state", isDirectory: true),
+            logsDirectory: root.appendingPathComponent("logs", isDirectory: true),
+            launchAgentsDirectory: root.appendingPathComponent("agents", isDirectory: true)
+        )
+        try store.ensureRuntimeDirectories()
+        try store.saveProfile(
+            try ProfileDefinition(name: "demo", serverName: "", dockerContext: "default", tunnelHost: "docker").normalized(),
+            originalName: nil
+        )
+        try store.saveCurrentProfile("demo")
+
+        var stoppedProfile: String?
+        let report = try DXWorkflowService.down(
+            store: store,
+            stop: { profileName, _ in
+                stoppedProfile = profileName
+            },
+            snapshotProvider: { _, profileName in
+                try expect(profileName == "demo", "dx down should ask for status of the active profile")
+                return AppSnapshot(
+                    profile: profileName,
+                    configuredDockerContext: "default",
+                    activeDockerContext: "default",
+                    tunnelLoaded: false,
+                    tunnelLabel: "local.devstackmenu.demo",
+                    compose: ComposeRuntimeSnapshot(
+                        configured: true,
+                        projectName: "demo",
+                        workingDirectory: "/tmp/demo",
+                        autoDownOnSwitch: false,
+                        autoUpOnActivate: false,
+                        runningServices: []
+                    ),
+                    services: []
+                )
+            }
+        )
+
+        try expect(stoppedProfile == "demo", "dx down should invoke compose-down logic for the active profile")
+        try expect(report.activeProfileName == "demo", "dx down should still report the active profile")
+    }
+
     private static func testDXEnvCheckFormatting() throws {
         let overview = ComposeEnvironmentOverview(
             workingDirectory: URL(fileURLWithPath: "/tmp/demo", isDirectory: true),
@@ -664,5 +759,38 @@ package enum DevStackSmokeChecks {
         } catch is ValidationError {
             return
         }
+    }
+
+    private static func testGeneratedComposeYAMLSerialization() throws {
+        let yaml = try ComposeSupport.renderedComposeYAML(
+            from: [
+                "services": [
+                    "db": [
+                        "image": "postgres:15",
+                        "volumes": [
+                            [
+                                "type": "bind",
+                                "source": "/var/lib/devstackmenu/profiles/state-corp-backend/project/data/db",
+                                "target": "/var/lib/postgresql/data",
+                                "bind": [
+                                    "create_host_path": true,
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]
+        )
+
+        let text = String(decoding: yaml, as: UTF8.self)
+        try expect(
+            text.contains("source: '/var/lib/devstackmenu/profiles/state-corp-backend/project/data/db'"),
+            "generated compose YAML should keep slash paths unescaped"
+        )
+        try expect(!text.contains("\\/"), "generated compose YAML should not contain JSON slash escapes")
+        try expect(
+            !text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{"),
+            "generated compose YAML should not be emitted as JSON"
+        )
     }
 }
