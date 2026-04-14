@@ -109,7 +109,8 @@ Owns editor/import window coordination and profile persistence callbacks.
 
 - `ProfileEditor.swift`: profile editor shell and shared window helpers
 - `ProfileEditor/`: profile editor layout, runtime/compose source flows, environment tooling, and service dialog
-- `ServerWizard.swift`: runtime creation and preparation flow
+- `ServerWizard.swift`: runtime creation UI flow
+- `ServerWizard/ServerWizardService.swift`: server validation, preparation orchestration, and persistence hooks
 - `ComposeImport.swift`: compose import flow
 - `VariableManager.swift`: shared env variable manager
 - `VariableManager/VariableManagerDataService.swift`: import/suggested profile support for variable sync
