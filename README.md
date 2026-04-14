@@ -123,16 +123,18 @@ If macOS blocks an already-downloaded release package with "Apple could not veri
 If you trust the release and want to install it manually, remove the quarantine attribute and open it again:
 
 ```sh
-PKG="$(ls -1t ~/Downloads/DevStackMenu-*.pkg | head -n 1)"
-xattr -dr com.apple.quarantine "$PKG"
+PKG="$(find "$HOME/Downloads" -maxdepth 1 -type f -name 'DevStackMenu-*.pkg' -exec stat -f '%m %N' {} \; | sort -nr | head -n 1 | cut -d' ' -f2-)"
+[ -n "$PKG" ] && [ -f "$PKG" ] || { echo "DevStackMenu pkg not found in ~/Downloads" >&2; exit 1; }
+xattr -d com.apple.quarantine "$PKG" 2>/dev/null || xattr -c "$PKG"
 open "$PKG"
 ```
 
 Or install directly without Finder:
 
 ```sh
-PKG="$(ls -1t ~/Downloads/DevStackMenu-*.pkg | head -n 1)"
-xattr -dr com.apple.quarantine "$PKG"
+PKG="$(find "$HOME/Downloads" -maxdepth 1 -type f -name 'DevStackMenu-*.pkg' -exec stat -f '%m %N' {} \; | sort -nr | head -n 1 | cut -d' ' -f2-)"
+[ -n "$PKG" ] && [ -f "$PKG" ] || { echo "DevStackMenu pkg not found in ~/Downloads" >&2; exit 1; }
+xattr -d com.apple.quarantine "$PKG" 2>/dev/null || xattr -c "$PKG"
 sudo installer -pkg "$PKG" -target /
 ```
 
