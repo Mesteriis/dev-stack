@@ -32,8 +32,8 @@ fi
 TMP_DIR="$(mktemp -d)"
 TMP_LOG="$TMP_DIR/release-install.log"
 TMP_PAYLOAD="$TMP_DIR/payload.txt"
-TMP_HELP="$TMP_DIR/dx-help.txt"
-TMP_HELP_ERR="$TMP_DIR/dx-help.err"
+TMP_DX_STATUS="$TMP_DIR/dx-status.txt"
+TMP_DX_STATUS_ERR="$TMP_DIR/dx-status.err"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 printf 'Using package: %s\n' "$PKG_PATH"
@@ -72,12 +72,12 @@ if [ ! -d "/Applications/Import Compose To DX.app" ]; then
   exit 1
 fi
 
-if /usr/local/bin/dx --help >"$TMP_HELP" 2>"$TMP_HELP_ERR"; then
+if /usr/local/bin/dx status >"$TMP_DX_STATUS" 2>"$TMP_DX_STATUS_ERR"; then
   printf 'dx status: '
-  /usr/local/bin/dx status
+  cat "$TMP_DX_STATUS"
 else
   echo "dx failed to run" >&2
-  cat "$TMP_HELP_ERR"
+  cat "$TMP_DX_STATUS_ERR"
   exit 1
 fi
 

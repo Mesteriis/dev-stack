@@ -6,7 +6,25 @@ if [ ! -x /usr/local/bin/dx ]; then
   exit 1
 fi
 
-if ! /usr/local/bin/dx status >/dev/null 2>&1; then
+DX_BIN="/usr/local/bin/dx"
+DX_STATUS_OUTPUT="$(mktemp)"
+DX_EXIT_CODE=0
+
+if ! "$DX_BIN" >"$DX_STATUS_OUTPUT" 2>&1; then
+  DX_EXIT_CODE=$?
+fi
+
+if [ "$DX_EXIT_CODE" != "0" ] && \
+   ! grep -Fq "Usage:" "$DX_STATUS_OUTPUT"; then
+  echo "Installation failed: /usr/local/bin/dx is not executable" >&2
+  cat "$DX_STATUS_OUTPUT" >&2
+  rm -f "$DX_STATUS_OUTPUT"
+  exit 1
+fi
+
+rm -f "$DX_STATUS_OUTPUT"
+
+if ! "$DX_BIN" status >/dev/null 2>&1; then
   echo "Installation failed: /usr/local/bin/dx is not executable" >&2
   exit 1
 fi
