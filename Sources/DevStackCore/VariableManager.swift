@@ -162,7 +162,7 @@ final class VariableManagerWindowController: NSWindowController, NSTableViewData
 
         do {
             let profiles = try store.profileNames()
-            let suggestedProfiles = suggestedProfileNames(for: url)
+            let suggestedProfiles = VariableManagerDataService.suggestedProfileNames(for: url, store: store)
             guard let selection = ManagedVariableImportDialog.runModal(
                 sourceURL: url,
                 importedCount: imported.count,
@@ -173,10 +173,11 @@ final class VariableManagerWindowController: NSWindowController, NSTableViewData
                 return
             }
 
-            let summary = try importVariables(
+            let summary = try VariableManagerDataService.importVariables(
                 imported,
                 assignedProfiles: selection.profileNames,
-                overwriteExistingValues: selection.overwriteExistingValues
+                overwriteExistingValues: selection.overwriteExistingValues,
+                store: store
             )
             reloadVariables(
                 message: "Imported \(summary.created) new and updated \(summary.updated) existing variable(s)"
@@ -290,59 +291,6 @@ final class VariableManagerWindowController: NSWindowController, NSTableViewData
         tableView.reloadData()
     }
 
-    private func importVariables(
-        _ imported: [String: String],
-        assignedProfiles: [String],
-        overwriteExistingValues: Bool
-    ) throws -> (created: Int, updated: Int) {
-        var currentValues = Dictionary(uniqueKeysWithValues: try store.managedVariables().map { ($0.name, $0) })
-        var created = 0
-        var updated = 0
-
-        for (name, value) in imported.sorted(by: { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }) {
-            if var existing = currentValues[name] {
-                if overwriteExistingValues {
-                    existing.value = value
-                }
-                existing.profileNames = Array(Set(existing.profileNames + assignedProfiles))
-                    .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-                currentValues[name] = try existing.normalized()
-                updated += 1
-            } else {
-                currentValues[name] = try ManagedVariableDefinition(
-                    name: name,
-                    value: value,
-                    profileNames: assignedProfiles
-                ).normalized()
-                created += 1
-            }
-        }
-
-        try store.saveManagedVariables(Array(currentValues.values))
-        return (created, updated)
-    }
-
-    private func suggestedProfileNames(for envURL: URL) -> [String] {
-        let envDirectory = envURL.deletingLastPathComponent().standardizedFileURL
-        let envGit = GitProjectInspector.inspectProject(at: envDirectory)
-        let profiles = (try? store.profileNames().compactMap { try? store.loadProfile(named: $0) }) ?? []
-
-        return profiles.compactMap { profile in
-            guard let projectDirectory = store.managedProjectDirectory(for: profile) else {
-                return nil
-            }
-            if projectDirectory.standardizedFileURL.path == envDirectory.path {
-                return profile.name
-            }
-            let profileGit = GitProjectInspector.inspectProject(at: projectDirectory)
-            if envGit?.repositoryRoot == profileGit?.repositoryRoot, envGit?.repositoryRoot != nil {
-                return profile.name
-            }
-            return nil
-        }
-        .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-
     private func presentError(_ message: String) {
         let alert = NSAlert()
         alert.alertStyle = .warning
@@ -356,208 +304,5 @@ final class VariableManagerWindowController: NSWindowController, NSTableViewData
         let button = NSButton(title: title, target: self, action: action)
         button.bezelStyle = .rounded
         return button
-    }
-}
-
-@MainActor
-private enum ManagedVariableEditorDialog {
-    static func runModal(
-        variable: ManagedVariableDefinition?,
-        availableProfiles: [String],
-        parentWindow: NSWindow?
-    ) -> ManagedVariableDefinition? {
-        let nameField = NSTextField(string: variable?.name ?? "")
-        let valueField = NSTextField(string: variable?.value ?? "")
-        let checkboxes = profileCheckboxes(
-            availableProfiles: availableProfiles,
-            selectedProfiles: Set(variable?.profileNames ?? [])
-        )
-
-        let accessory = NSStackView()
-        accessory.orientation = .vertical
-        accessory.alignment = .leading
-        accessory.spacing = 8
-
-        accessory.addArrangedSubview(formRow(label: "Name", field: nameField))
-        accessory.addArrangedSubview(formRow(label: "Value", field: valueField))
-        accessory.addArrangedSubview(sectionLabel("Assigned Profiles"))
-        accessory.addArrangedSubview(profileChecklistContainer(checkboxes))
-
-        let alert = NSAlert()
-        alert.messageText = variable == nil ? "Add Variable" : "Edit Variable"
-        alert.informativeText = "Managed variables are written before project .env files, so local env files can still override them."
-        alert.accessoryView = accessory
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-
-        while true {
-            let response: NSApplication.ModalResponse
-            if let parentWindow {
-                response = alert.runModal()
-                _ = parentWindow
-            } else {
-                response = alert.runModal()
-            }
-
-            guard response == .alertFirstButtonReturn else {
-                return nil
-            }
-
-            let selectedProfiles = checkboxes
-                .filter { $0.state == .on }
-                .map(\.title)
-
-            do {
-                return try ManagedVariableDefinition(
-                    name: nameField.stringValue,
-                    value: valueField.stringValue,
-                    profileNames: selectedProfiles
-                ).normalized()
-            } catch {
-                showSimpleError(error.localizedDescription)
-            }
-        }
-    }
-
-    private static func profileCheckboxes(
-        availableProfiles: [String],
-        selectedProfiles: Set<String>
-    ) -> [NSButton] {
-        availableProfiles.map { profileName in
-            let checkbox = NSButton(checkboxWithTitle: profileName, target: nil, action: nil)
-            checkbox.state = selectedProfiles.contains(profileName) ? .on : .off
-            return checkbox
-        }
-    }
-
-    static func profileChecklistContainer(_ checkboxes: [NSButton]) -> NSView {
-        if checkboxes.isEmpty {
-            return NSTextField(wrappingLabelWithString: "Create at least one profile before assigning managed variables.")
-        }
-
-        let content = NSStackView(views: checkboxes)
-        content.orientation = .vertical
-        content.alignment = .leading
-        content.spacing = 6
-
-        let scrollView = NSScrollView()
-        scrollView.hasVerticalScroller = true
-        scrollView.borderType = .bezelBorder
-        scrollView.documentView = content
-        scrollView.frame = NSRect(x: 0, y: 0, width: 420, height: 160)
-        return scrollView
-    }
-
-    private static func formRow(label text: String, field: NSView) -> NSView {
-        let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
-        label.alignment = .right
-
-        let grid = NSGridView(views: [[label, field]])
-        grid.column(at: 0).width = 80
-        grid.columnSpacing = 12
-        return grid
-    }
-
-    private static func sectionLabel(_ text: String) -> NSTextField {
-        let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
-        return label
-    }
-
-    private static func showSimpleError(_ message: String) {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "Variable Error"
-        alert.informativeText = message
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
-    }
-}
-
-private struct ManagedVariableImportSelection {
-    let profileNames: [String]
-    let overwriteExistingValues: Bool
-}
-
-@MainActor
-private enum ManagedVariableImportDialog {
-    static func runModal(
-        sourceURL: URL,
-        importedCount: Int,
-        availableProfiles: [String],
-        suggestedProfiles: [String],
-        parentWindow: NSWindow?
-    ) -> ManagedVariableImportSelection? {
-        let overwriteCheckbox = NSButton(
-            checkboxWithTitle: "Overwrite values for variables that already exist",
-            target: nil,
-            action: nil
-        )
-        overwriteCheckbox.state = .on
-
-        let checkboxes = availableProfiles.map { profileName in
-            let checkbox = NSButton(checkboxWithTitle: profileName, target: nil, action: nil)
-            checkbox.state = suggestedProfiles.contains(profileName) ? .on : .off
-            return checkbox
-        }
-
-        let accessory = NSStackView()
-        accessory.orientation = .vertical
-        accessory.alignment = .leading
-        accessory.spacing = 8
-
-        let description = NSTextField(
-            wrappingLabelWithString: "Import \(importedCount) variable(s) from \(sourceURL.lastPathComponent) and assign them to selected profiles."
-        )
-        description.maximumNumberOfLines = 3
-        accessory.addArrangedSubview(description)
-
-        if !suggestedProfiles.isEmpty {
-            let suggested = NSTextField(
-                wrappingLabelWithString: "Suggested profiles: \(suggestedProfiles.joined(separator: ", "))"
-            )
-            suggested.textColor = .secondaryLabelColor
-            suggested.maximumNumberOfLines = 2
-            accessory.addArrangedSubview(suggested)
-        }
-
-        accessory.addArrangedSubview(overwriteCheckbox)
-        accessory.addArrangedSubview(ManagedVariableEditorDialog.profileChecklistContainer(checkboxes))
-
-        let alert = NSAlert()
-        alert.messageText = "Import .env Into Variable Manager"
-        alert.informativeText = sourceURL.path
-        alert.accessoryView = accessory
-        alert.addButton(withTitle: "Import")
-        alert.addButton(withTitle: "Cancel")
-
-        while true {
-            let response: NSApplication.ModalResponse
-            if let parentWindow {
-                response = alert.runModal()
-                _ = parentWindow
-            } else {
-                response = alert.runModal()
-            }
-
-            guard response == .alertFirstButtonReturn else {
-                return nil
-            }
-
-            let selectedProfiles = checkboxes.filter { $0.state == .on }.map(\.title)
-            if selectedProfiles.isEmpty {
-                let error = NSAlert()
-                error.alertStyle = .warning
-                error.messageText = "Select at least one profile."
-                error.runModal()
-                continue
-            }
-
-            return ManagedVariableImportSelection(
-                profileNames: selectedProfiles,
-                overwriteExistingValues: overwriteCheckbox.state == .on
-            )
-        }
     }
 }

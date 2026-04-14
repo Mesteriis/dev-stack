@@ -111,6 +111,8 @@ Owns editor/import window coordination and profile persistence callbacks.
 - `ServerWizard.swift`: runtime creation and preparation flow
 - `ComposeImport.swift`: compose import flow
 - `VariableManager.swift`: shared env variable manager
+- `VariableManager/VariableManagerDataService.swift`: import/suggested profile support for variable sync
+- `VariableManager/VariableManagerDialogs.swift`: add/edit/import modal dialogs
 - `SecretManager.swift`: profile secret manager
 
 ### CLI And Executables
