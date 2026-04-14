@@ -8,14 +8,30 @@ on:
 
 jobs:
   build-test:
+    name: Build, test, package
     runs-on: macos-latest
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-swift-${{ hashFiles('Package.swift') }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-swift-
+
       - name: Show toolchain
         run: swift --version
+
+      - name: Validate scripts
+        run: |
+          sh -n Scripts/build-app.sh
+          sh -n Scripts/install-local.sh
+          sh -n Scripts/package-release.sh
 
       - name: Build
         run: make build
@@ -25,3 +41,26 @@ jobs:
 
       - name: Build app bundles
         run: make app
+
+      - name: Build installer package
+        run: make package
+
+      - name: Build summary
+        run: |
+          ls -1 dist/DevStackMenu-*.pkg
+          pkgutil --expand "$(ls -1 dist/DevStackMenu-*.pkg | head -n 1)" /tmp/devstackmenu-pkg-expanded
+          ls -la /tmp/devstackmenu-pkg-expanded
+
+      - name: Install package (smoke)
+        run: |
+          sudo installer -pkg "$(ls -1 dist/DevStackMenu-*.pkg | head -n 1)" -target /
+          [ -x /usr/local/bin/dx ]
+          [ -d /Applications/DevStackMenu.app ]
+
+      - name: Remove temporary install artifacts
+        if: always()
+        run: |
+          rm -rf /tmp/devstackmenu-pkg-expanded
+          sudo rm -rf /Applications/DevStackMenu.app
+          sudo rm -rf /Applications/Import\ Compose\ To\ DX.app
+          sudo rm -f /usr/local/bin/dx

@@ -15,14 +15,15 @@ Do not bump `Resources/Info.plist` for ordinary maintenance, documentation sync 
 1. Run `make check`.
 2. Update the unreleased section in `CHANGELOG.md`.
 3. If this commit is a real release, bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`.
-4. Build release artifacts with `make app`.
-5. Sanity-check the generated apps in `dist/`.
-6. Verify the main app and compose-import helper use distinct bundle identifiers in the built artifacts.
-7. Verify single-instance behavior by launching the installed app twice and confirming the second launch exits while the original instance stays alive.
+4. Build release artifacts with `make package`.
+5. Sanity-check the generated package and confirm it installs with `sudo installer -pkg dist/DevStackMenu-*.pkg -target /`.
+6. Sanity-check generated apps in `/Applications` after install.
+7. Verify the main app and compose-import helper use distinct bundle identifiers in the built artifacts.
+8. Verify single-instance behavior by launching the installed app twice and confirming the second launch exits while the original instance stays alive.
 
 ## GitHub Release Flow
 
-The repository includes a workflow that can build and upload unsigned app bundles as artifacts for a tagged release or a manual run.
+The repository includes a workflow that builds a single unsigned `.pkg` artifact and uploads it for tagged releases or manual runs.
 
 Recommended tag format:
 

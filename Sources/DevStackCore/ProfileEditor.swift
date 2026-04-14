@@ -3,7 +3,7 @@ import Foundation
 import UniformTypeIdentifiers
 
 @MainActor
-final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate {
+final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate, NSTextViewDelegate {
     typealias SaveHandler = @MainActor (_ profile: ProfileDefinition, _ originalName: String?) throws -> Void
 
     private let store: ProfileStore
@@ -13,10 +13,10 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
     private let onClose: () -> Void
 
     private let nameField = NSTextField()
-    private let serverField = NSPopUpButton()
-    private let serverDockerContextField = NSTextField(labelWithString: "")
-    private let serverRemoteHostField = NSTextField(labelWithString: "")
-    private let serverSummaryField = NSTextField(wrappingLabelWithString: "")
+    private let runtimeField = NSPopUpButton()
+    private let runtimeDockerContextField = NSTextField(labelWithString: "")
+    private let runtimeRemoteHostField = NSTextField(labelWithString: "")
+    private let runtimeSummaryField = NSTextField(wrappingLabelWithString: "")
     private let composeProjectField = NSTextField()
     private let composeWorkingDirectoryField = NSTextField()
     private let composeSourceField = NSTextField(wrappingLabelWithString: "")
@@ -27,10 +27,30 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
     private let shellExportsTextView = NSTextView()
     private let composeTextView = NSTextView()
     private let servicesTableView = NSTableView()
-    private var servers: [RemoteServerDefinition]
+    private let environmentSummaryField = NSTextField(wrappingLabelWithString: "")
+    private let environmentTableView = NSTableView()
+    private let environmentKeyField = NSTextField(labelWithString: "No variable selected")
+    private let environmentStatusField = NSTextField(wrappingLabelWithString: "")
+    private let environmentValueField = NSTextField()
+    private let environmentSensitiveCheckbox = NSButton(checkboxWithTitle: "Save in Keychain", target: nil, action: nil)
+    private let environmentNoteField = NSTextField(wrappingLabelWithString: "")
+    private let clipboardPreviewField = NSTextField(wrappingLabelWithString: "")
+    private var environmentGenerateButton: NSButton?
+    private var environmentSaveButton: NSButton?
+    private var environmentIgnoreButton: NSButton?
+    private var environmentExternalButton: NSButton?
+    private var clipboardUseButton: NSButton?
+    private var runtimeTargets: [RemoteServerDefinition]
     private var services: [ServiceDefinition]
     private var composeSourceFile = ""
     private var composeAdditionalSourceFiles: [String] = []
+    private var environmentOverview: ComposeEnvironmentOverview?
+    private var externalEnvironmentKeys: [String]
+    private var ignoredEnvironmentKeys = Set<String>()
+    private var environmentMessage: String?
+    private var clipboardParseResult: ClipboardSmartParseResult?
+    private var clipboardTimer: Timer?
+    private var lastClipboardChangeCount = NSPasteboard.general.changeCount
 
     init(
         store: ProfileStore,
@@ -44,10 +64,11 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         self.dockerContexts = dockerContexts
         self.onSave = onSave
         self.onClose = onClose
-        self.servers = (try? store.remoteServers().sorted {
+        self.runtimeTargets = (try? store.runtimeTargets().sorted {
             $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }) ?? []
         self.services = profile?.services ?? []
+        self.externalEnvironmentKeys = profile?.externalEnvironmentKeys ?? []
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 980, height: 780),
@@ -64,6 +85,7 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
 
         configureFields(with: profile)
         buildUI()
+        startClipboardObservation()
     }
 
     @available(*, unavailable)
@@ -72,6 +94,7 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
     }
 
     func windowWillClose(_ notification: Notification) {
+        clipboardTimer?.invalidate()
         onClose()
     }
 
@@ -81,20 +104,25 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
 
     private func configureFields(with profile: ProfileDefinition?) {
         nameField.stringValue = profile?.name ?? ""
+        nameField.target = self
+        nameField.action = #selector(refreshComposeEnvironmentAction(_:))
         composeProjectField.stringValue = profile?.compose.projectName ?? ""
         composeWorkingDirectoryField.stringValue = profile?.compose.workingDirectory ?? ""
+        composeWorkingDirectoryField.target = self
+        composeWorkingDirectoryField.action = #selector(refreshComposeEnvironmentAction(_:))
         composeSourceFile = profile?.compose.sourceFile ?? ""
         composeAdditionalSourceFiles = profile?.compose.additionalSourceFiles ?? []
         shellExportsTextView.string = (profile?.shellExports ?? []).joined(separator: "\n")
         composeTextView.string = profile?.compose.content ?? ""
+        composeTextView.delegate = self
 
-        serverField.removeAllItems()
-        serverField.target = self
-        serverField.action = #selector(serverSelectionChanged(_:))
-        reloadServers(preferredName: preferredServerName(for: profile))
-        serverSummaryField.textColor = .secondaryLabelColor
-        serverSummaryField.maximumNumberOfLines = 0
-        updateServerDetails()
+        runtimeField.removeAllItems()
+        runtimeField.target = self
+        runtimeField.action = #selector(runtimeSelectionChanged(_:))
+        reloadRuntimeTargets(preferredName: preferredRuntimeName(for: profile))
+        runtimeSummaryField.textColor = .secondaryLabelColor
+        runtimeSummaryField.maximumNumberOfLines = 0
+        updateRuntimeDetails()
 
         localContainerModeField.removeAllItems()
         localContainerModeField.addItems(withTitles: LocalContainerMode.allCases.map(\.title))
@@ -110,6 +138,8 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         composeOverlaysSummaryField.maximumNumberOfLines = 0
         updateComposeSourceDetails()
         updateComposeOverlayDetails()
+        configureEnvironmentFields()
+        reloadComposeEnvironmentOverview()
     }
 
     private func buildUI() {
@@ -162,6 +192,8 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
 
         stack.addArrangedSubview(sectionTitle("Docker Compose Contents"))
         stack.addArrangedSubview(textSection(composeTextView, height: 250))
+        stack.addArrangedSubview(sectionTitle("Compose Environment"))
+        stack.addArrangedSubview(composeEnvironmentSection())
 
         stack.addArrangedSubview(buttonRow())
     }
@@ -169,10 +201,10 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
     private func profileGrid() -> NSGridView {
         let grid = NSGridView(views: [
             [label("Name"), nameField],
-            [label("Server"), serverSelectionRow()],
-            [label("Docker Context"), serverDockerContextField],
-            [label("Remote Docker Server"), serverRemoteHostField],
-            [NSView(), serverSummaryField],
+            [label("Runtime"), runtimeSelectionRow()],
+            [label("Docker Context"), runtimeDockerContextField],
+            [label("Remote Docker Runtime"), runtimeRemoteHostField],
+            [NSView(), runtimeSummaryField],
             [label("Compose Project"), composeProjectField],
             [label("Compose Working Dir"), composeWorkingDirectoryField],
             [label("Source Compose"), composeSourceSelectionRow()],
@@ -189,10 +221,10 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         return grid
     }
 
-    private func serverSelectionRow() -> NSView {
-        let addButton = button(title: "New Server…", action: #selector(addServerAction(_:)))
-        let editButton = button(title: "Edit…", action: #selector(editServerAction(_:)))
-        let stack = NSStackView(views: [serverField, addButton, editButton])
+    private func runtimeSelectionRow() -> NSView {
+        let addButton = button(title: "New Runtime…", action: #selector(addRuntimeAction(_:)))
+        let editButton = button(title: "Edit…", action: #selector(editRuntimeAction(_:)))
+        let stack = NSStackView(views: [runtimeField, addButton, editButton])
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.spacing = 8
@@ -240,6 +272,84 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         stack.alignment = .leading
         stack.spacing = 8
         return stack
+    }
+
+    private func composeEnvironmentSection() -> NSView {
+        let container = NSStackView()
+        container.orientation = .vertical
+        container.alignment = .leading
+        container.spacing = 8
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        environmentSummaryField.maximumNumberOfLines = 4
+        environmentSummaryField.textColor = .secondaryLabelColor
+        container.addArrangedSubview(environmentSummaryField)
+
+        let scrollView = NSScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.hasVerticalScroller = true
+        scrollView.borderType = .bezelBorder
+        scrollView.documentView = environmentTableView
+
+        environmentTableView.headerView = NSTableHeaderView()
+        environmentTableView.usesAlternatingRowBackgroundColors = true
+        environmentTableView.rowHeight = 24
+        environmentTableView.delegate = self
+        environmentTableView.dataSource = self
+        environmentTableView.target = self
+        environmentTableView.action = #selector(environmentSelectionChanged(_:))
+        environmentTableView.allowsMultipleSelection = false
+
+        addEnvironmentColumn(id: "key", title: "Variable", width: 220)
+        addEnvironmentColumn(id: "status", title: "Status", width: 540)
+
+        NSLayoutConstraint.activate([
+            scrollView.widthAnchor.constraint(greaterThanOrEqualToConstant: 860),
+            scrollView.heightAnchor.constraint(equalToConstant: 150),
+        ])
+        container.addArrangedSubview(scrollView)
+
+        environmentStatusField.maximumNumberOfLines = 3
+        environmentStatusField.textColor = .secondaryLabelColor
+        environmentNoteField.maximumNumberOfLines = 3
+        environmentNoteField.textColor = .secondaryLabelColor
+        clipboardPreviewField.maximumNumberOfLines = 3
+        clipboardPreviewField.textColor = .secondaryLabelColor
+
+        let detailGrid = NSGridView(views: [
+            [label("Selected"), environmentKeyField],
+            [label("Value"), environmentValueField],
+            [NSView(), environmentSensitiveCheckbox],
+            [NSView(), environmentStatusField],
+            [NSView(), environmentNoteField],
+            [NSView(), clipboardPreviewRow()],
+        ])
+        detailGrid.column(at: 0).width = 150
+        detailGrid.columnSpacing = 12
+        detailGrid.rowSpacing = 6
+        container.addArrangedSubview(detailGrid)
+
+        let generateButton = button(title: "Generate…", action: #selector(generateEnvironmentValueAction(_:)))
+        let saveButton = button(title: "Save Value", action: #selector(saveEnvironmentValueAction(_:)))
+        let ignoreButton = button(title: "Ignore", action: #selector(ignoreEnvironmentVariableAction(_:)))
+        let externalButton = button(title: "Mark as External", action: #selector(toggleExternalEnvironmentVariableAction(_:)))
+        environmentGenerateButton = generateButton
+        environmentSaveButton = saveButton
+        environmentIgnoreButton = ignoreButton
+        environmentExternalButton = externalButton
+        let buttons = NSStackView(views: [
+            generateButton,
+            saveButton,
+            ignoreButton,
+            externalButton,
+            button(title: "Refresh Env", action: #selector(refreshComposeEnvironmentAction(_:))),
+        ])
+        buttons.orientation = .horizontal
+        buttons.alignment = .centerY
+        buttons.spacing = 8
+        container.addArrangedSubview(buttons)
+
+        return container
     }
 
     private func serviceTableSection() -> NSView {
@@ -340,11 +450,49 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         servicesTableView.addTableColumn(column)
     }
 
+    private func addEnvironmentColumn(id: String, title: String, width: CGFloat) {
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))
+        column.title = title
+        column.width = width
+        column.resizingMask = .userResizingMask
+        environmentTableView.addTableColumn(column)
+    }
+
     func numberOfRows(in tableView: NSTableView) -> Int {
-        services.count
+        if tableView == environmentTableView {
+            return environmentOverview?.entries.count ?? 0
+        }
+        return services.count
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        if tableView == environmentTableView {
+            guard let entry = environmentOverview?.entries[row] else {
+                return nil
+            }
+
+            let identifier = tableColumn?.identifier.rawValue ?? "status"
+            let text = identifier == "key" ? entry.key : entry.statusText
+            let cellIdentifier = NSUserInterfaceItemIdentifier("env-cell-\(identifier)")
+            let labelField: NSTextField
+            if let existing = tableView.makeView(withIdentifier: cellIdentifier, owner: self) as? NSTextField {
+                labelField = existing
+            } else {
+                labelField = NSTextField(labelWithString: "")
+                labelField.identifier = cellIdentifier
+                labelField.lineBreakMode = .byTruncatingMiddle
+            }
+            labelField.stringValue = text
+            if identifier == "status", entry.isMissing || entry.isEmptyValue {
+                labelField.textColor = .systemRed
+            } else if identifier == "status", entry.isMarkedExternal {
+                labelField.textColor = .systemOrange
+            } else {
+                labelField.textColor = .labelColor
+            }
+            return labelField
+        }
+
         guard row >= 0, row < services.count else {
             return nil
         }
@@ -383,6 +531,15 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         }
         labelField.stringValue = text
         return labelField
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        guard let tableView = notification.object as? NSTableView else {
+            return
+        }
+        if tableView == environmentTableView {
+            updateEnvironmentDetails()
+        }
     }
 
     @objc private func addServiceAction(_ sender: Any?) {
@@ -472,8 +629,8 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         updateLocalContainerModeDescription()
     }
 
-    @objc private func serverSelectionChanged(_ sender: Any?) {
-        updateServerDetails()
+    @objc private func runtimeSelectionChanged(_ sender: Any?) {
+        updateRuntimeDetails()
     }
 
     @objc private func chooseComposeSourceAction(_ sender: Any?) {
@@ -492,6 +649,7 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         }
         updateComposeSourceDetails()
         updateComposeOverlayDetails()
+        reloadComposeEnvironmentOverview()
     }
 
     @objc private func clearComposeSourceAction(_ sender: Any?) {
@@ -503,6 +661,7 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         }
         updateComposeSourceDetails()
         updateComposeOverlayDetails()
+        reloadComposeEnvironmentOverview()
     }
 
     @objc private func openComposeSourceAction(_ sender: Any?) {
@@ -527,6 +686,7 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
             composeAdditionalSourceFiles.append(path)
         }
         updateComposeOverlayDetails()
+        reloadComposeEnvironmentOverview()
     }
 
     @objc private func removeComposeOverlayAction(_ sender: Any?) {
@@ -536,6 +696,7 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         }
         composeAdditionalSourceFiles.removeAll { $0 == selectedPath }
         updateComposeOverlayDetails()
+        reloadComposeEnvironmentOverview()
     }
 
     @objc private func openComposeOverlayAction(_ sender: Any?) {
@@ -547,29 +708,30 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
 
     @objc private func composeOverlaySelectionChanged(_ sender: Any?) {
         updateComposeOverlayDetails()
+        updateEnvironmentDetails()
     }
 
-    @objc private func addServerAction(_ sender: Any?) {
+    @objc private func addRuntimeAction(_ sender: Any?) {
         let suggestedContext = dockerContexts.first(where: \.isCurrent)?.name ?? "default"
         if let server = ServerWizardWindowController.runModal(
             store: store,
             existingServer: nil,
             suggestedDockerContext: suggestedContext
         ) {
-            upsertServer(server)
-            reloadServers(preferredName: server.name)
-            updateServerDetails()
+            upsertRuntimeTarget(server)
+            reloadRuntimeTargets(preferredName: server.name)
+            updateRuntimeDetails()
         }
     }
 
-    @objc private func editServerAction(_ sender: Any?) {
-        guard let server = selectedServer() else {
-            presentError("Create or select a server first.")
+    @objc private func editRuntimeAction(_ sender: Any?) {
+        guard let server = selectedRuntimeTarget() else {
+            presentError("Create or select a runtime first.")
             return
         }
 
         let suggestedContext = dockerContexts.first(where: \.isCurrent)?.name ?? server.dockerContext
-        let originalServerName = server.name
+        let originalRuntimeName = server.name
         let updated = ServerWizardWindowController.runModal(
             store: store,
             existingServer: server,
@@ -577,23 +739,23 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         )
 
         if let updated {
-            removeServer(named: originalServerName)
-            upsertServer(updated)
-            reloadServers(preferredName: updated.name)
+            removeRuntimeTarget(named: originalRuntimeName)
+            upsertRuntimeTarget(updated)
+            reloadRuntimeTargets(preferredName: updated.name)
         } else {
-            servers = (try? store.remoteServers().sorted {
+            runtimeTargets = (try? store.runtimeTargets().sorted {
                 $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }) ?? []
-            reloadServers(preferredName: selectedServerName() == originalServerName ? nil : selectedServerName())
+            reloadRuntimeTargets(preferredName: selectedRuntimeName() == originalRuntimeName ? nil : selectedRuntimeName())
         }
 
-        updateServerDetails()
+        updateRuntimeDetails()
     }
 
     private func buildProfile() throws -> ProfileDefinition {
         let selectedMode = selectedLocalContainerMode()
-        guard let server = selectedServer() else {
-            throw ValidationError("Choose or create a Docker server first.")
+        guard let server = selectedRuntimeTarget() else {
+            throw ValidationError("Choose or create a runtime target first.")
         }
         let profile = ProfileDefinition(
             name: nameField.stringValue,
@@ -601,6 +763,7 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
             dockerContext: server.dockerContext,
             tunnelHost: server.remoteDockerServerDisplay,
             shellExports: splitLines(shellExportsTextView.string),
+            externalEnvironmentKeys: externalEnvironmentKeys,
             services: services,
             compose: ComposeDefinition(
                 projectName: composeProjectField.stringValue,
@@ -621,6 +784,402 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    func textDidChange(_ notification: Notification) {
+        guard let object = notification.object as? NSTextView, object == composeTextView else {
+            return
+        }
+        reloadComposeEnvironmentOverview()
+    }
+
+    @objc private func environmentSelectionChanged(_ sender: Any?) {
+        updateEnvironmentDetails()
+    }
+
+    @objc private func refreshComposeEnvironmentAction(_ sender: Any?) {
+        reloadComposeEnvironmentOverview()
+    }
+
+    @objc private func generateEnvironmentValueAction(_ sender: Any?) {
+        guard let entry = selectedEnvironmentEntry() else {
+            presentError("Select a compose variable first.")
+            return
+        }
+        guard entry.isMissing || entry.isEmptyValue else {
+            presentError("Generation is only available for missing or empty compose variables.")
+            return
+        }
+
+        guard let draftProfile = try? buildProfileDraftForUtilities() else {
+            presentError("Complete the profile basics before generating environment values.")
+            return
+        }
+
+        let canSaveToKeychain = entry.envFileURL == nil && !entry.isEmptyValue
+        let defaultSensitive = canSaveToKeychain && ContextValueGenerator.looksSensitive(key: entry.key)
+        let generatorField = NSPopUpButton()
+        generatorField.addItems(withTitles: EnvironmentValueGeneratorKind.allCases.map(\.title))
+        generatorField.selectItem(at: 0)
+
+        let sensitiveCheckbox = NSButton(
+            checkboxWithTitle: "Save in Keychain",
+            target: nil,
+            action: nil
+        )
+        sensitiveCheckbox.state = defaultSensitive ? .on : .off
+        sensitiveCheckbox.isEnabled = canSaveToKeychain
+
+        let destinationText: String
+        if let envFileURL = entry.envFileURL {
+            destinationText = "Compose already sees \(entry.key) in \(envFileURL.lastPathComponent), so generated values will update that file."
+        } else if canSaveToKeychain {
+            destinationText = "Missing values can be written to .env.devstack or stored in Keychain if sensitive."
+        } else {
+            destinationText = "Generated values will be written to .env.devstack for this profile."
+        }
+
+        let accessory = NSStackView()
+        accessory.orientation = .vertical
+        accessory.alignment = .leading
+        accessory.spacing = 8
+        accessory.addArrangedSubview(
+            NSTextField(wrappingLabelWithString: destinationText)
+        )
+        accessory.addArrangedSubview(formRow(label: "Variable", field: NSTextField(labelWithString: entry.key)))
+        accessory.addArrangedSubview(formRow(label: "Generator", field: generatorField))
+        accessory.addArrangedSubview(sensitiveCheckbox)
+
+        let alert = NSAlert()
+        alert.messageText = "Generate value for \(entry.key)"
+        alert.informativeText = "Choose the generator type and save target."
+        alert.accessoryView = accessory
+        alert.addButton(withTitle: "Generate")
+        alert.addButton(withTitle: "Cancel")
+
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            return
+        }
+
+        let selectedKind = EnvironmentValueGeneratorKind.allCases[generatorField.indexOfSelectedItem]
+        do {
+            let value = try ContextValueGenerator.generate(kind: selectedKind)
+            environmentValueField.stringValue = value
+            let saveToKeychain = sensitiveCheckbox.state == .on && sensitiveCheckbox.isEnabled
+            try persistEnvironmentValue(
+                key: entry.key,
+                value: value,
+                saveToKeychain: saveToKeychain,
+                draftProfile: draftProfile,
+                entry: entry
+            )
+            let destinationName = (entry.envFileURL ?? environmentOverview?.profileEnvironmentFile)?.lastPathComponent ?? ".env.devstack"
+            environmentMessage = saveToKeychain
+                ? "Saved \(entry.key) in Keychain"
+                : "Saved \(entry.key) to \(destinationName)"
+            reloadComposeEnvironmentOverview(selecting: entry.key)
+        } catch {
+            presentError(error.localizedDescription)
+        }
+    }
+
+    @objc private func saveEnvironmentValueAction(_ sender: Any?) {
+        guard let entry = selectedEnvironmentEntry() else {
+            presentError("Select a compose variable first.")
+            return
+        }
+
+        let value = environmentValueField.stringValue
+        guard !value.isEmpty else {
+            presentError("Enter a value first.")
+            return
+        }
+
+        guard let draftProfile = try? buildProfileDraftForUtilities() else {
+            presentError("Complete the profile basics before saving environment values.")
+            return
+        }
+
+        do {
+            let saveToKeychain = environmentSensitiveCheckbox.state == .on && environmentSensitiveCheckbox.isEnabled
+            try persistEnvironmentValue(
+                key: entry.key,
+                value: value,
+                saveToKeychain: saveToKeychain,
+                draftProfile: draftProfile,
+                entry: entry
+            )
+            let destinationName = (entry.envFileURL ?? environmentOverview?.profileEnvironmentFile)?.lastPathComponent ?? ".env.devstack"
+            environmentMessage = saveToKeychain
+                ? "Saved \(entry.key) in Keychain"
+                : "Saved \(entry.key) to \(destinationName)"
+            reloadComposeEnvironmentOverview(selecting: entry.key)
+        } catch {
+            presentError(error.localizedDescription)
+        }
+    }
+
+    @objc private func ignoreEnvironmentVariableAction(_ sender: Any?) {
+        guard let entry = selectedEnvironmentEntry() else {
+            presentError("Select a compose variable first.")
+            return
+        }
+        ignoredEnvironmentKeys.insert(entry.key)
+        environmentMessage = "Ignored \(entry.key) for this editor session"
+        reloadComposeEnvironmentOverview()
+    }
+
+    @objc private func toggleExternalEnvironmentVariableAction(_ sender: Any?) {
+        guard let entry = selectedEnvironmentEntry() else {
+            presentError("Select a compose variable first.")
+            return
+        }
+        guard entry.isMissing || entry.isMarkedExternal else {
+            presentError("Only truly missing variables can be marked as external.")
+            return
+        }
+
+        if externalEnvironmentKeys.contains(entry.key) {
+            externalEnvironmentKeys.removeAll { $0 == entry.key }
+            environmentMessage = "Removed external mark from \(entry.key)"
+        } else {
+            externalEnvironmentKeys.append(entry.key)
+            environmentMessage = "Marked \(entry.key) as external"
+        }
+        ignoredEnvironmentKeys.remove(entry.key)
+        reloadComposeEnvironmentOverview(selecting: entry.key)
+    }
+
+    @objc private func useClipboardResultAction(_ sender: Any?) {
+        guard let value = clipboardParseResult?.value else {
+            return
+        }
+        environmentValueField.stringValue = value
+        updateEnvironmentDetails()
+    }
+
+    private func configureEnvironmentFields() {
+        environmentValueField.placeholderString = "Selected variable value"
+        environmentSensitiveCheckbox.target = self
+        environmentSensitiveCheckbox.action = #selector(environmentSensitivityChanged(_:))
+        environmentStatusField.stringValue = "Select a compose variable to inspect env resolution."
+        environmentNoteField.stringValue = ""
+        clipboardPreviewField.stringValue = ""
+    }
+
+    @objc private func environmentSensitivityChanged(_ sender: Any?) {
+        updateEnvironmentDetails()
+    }
+
+    private func buildProfileDraftForUtilities() throws -> ProfileDefinition {
+        let selectedMode = selectedLocalContainerMode()
+        let runtime = selectedRuntimeTarget()
+        let trimmedName = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let draftName = trimmedName.isEmpty ? "unsaved-profile" : trimmedName
+        return try ProfileDefinition(
+            name: draftName,
+            serverName: runtime?.name ?? "",
+            dockerContext: runtime?.dockerContext ?? (dockerContexts.first(where: \.isCurrent)?.name ?? "default"),
+            tunnelHost: runtime?.remoteDockerServerDisplay ?? "docker",
+            shellExports: splitLines(shellExportsTextView.string),
+            externalEnvironmentKeys: externalEnvironmentKeys,
+            services: services,
+            compose: ComposeDefinition(
+                projectName: composeProjectField.stringValue,
+                workingDirectory: composeWorkingDirectoryField.stringValue,
+                sourceFile: composeSourceFile,
+                additionalSourceFiles: composeAdditionalSourceFiles,
+                autoDownOnSwitch: selectedMode.autoDownOnSwitch,
+                autoUpOnActivate: selectedMode.autoUpOnActivate,
+                content: composeTextView.string
+            )
+        ).normalized()
+    }
+
+    private func reloadComposeEnvironmentOverview(selecting preferredKey: String? = nil) {
+        guard let profile = try? buildProfileDraftForUtilities() else {
+            environmentOverview = nil
+            environmentSummaryField.stringValue = "Compose environment utilities become available once the compose working directory and contents are valid."
+            environmentTableView.reloadData()
+            updateEnvironmentDetails()
+            return
+        }
+
+        do {
+            let overview = try ComposeSupport.environmentOverview(
+                profile: profile,
+                store: store,
+                ignoredKeys: ignoredEnvironmentKeys
+            )
+            environmentOverview = overview
+            let missingCount = overview.entries.filter { $0.isMissing || $0.isEmptyValue }.count
+            let externalCount = overview.entries.filter(\.isMarkedExternal).count
+            let summaryLines = [
+                "Referenced: \(overview.referencedKeys.count)  |  Missing: \(missingCount)  |  External: \(externalCount)",
+                "Editable env file: \(overview.profileEnvironmentFile.lastPathComponent) in \(overview.workingDirectory.path)",
+            ]
+            environmentSummaryField.stringValue = ([environmentMessage].compactMap { $0 } + [summaryLines.joined(separator: "\n")]).joined(separator: "\n\n")
+            environmentMessage = nil
+            environmentTableView.reloadData()
+            selectEnvironmentKey(preferredKey)
+        } catch {
+            environmentOverview = nil
+            environmentSummaryField.stringValue = error.localizedDescription
+            environmentTableView.reloadData()
+            updateEnvironmentDetails()
+        }
+    }
+
+    private func selectEnvironmentKey(_ preferredKey: String?) {
+        let row: Int
+        if let preferredKey,
+           let index = environmentOverview?.entries.firstIndex(where: { $0.key == preferredKey }) {
+            row = index
+        } else if let entries = environmentOverview?.entries, !entries.isEmpty {
+            row = 0
+        } else {
+            updateEnvironmentDetails()
+            return
+        }
+        environmentTableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        updateEnvironmentDetails()
+    }
+
+    private func selectedEnvironmentEntry() -> ComposeEnvironmentEntry? {
+        let row = environmentTableView.selectedRow
+        guard row >= 0, row < (environmentOverview?.entries.count ?? 0) else {
+            return nil
+        }
+        return environmentOverview?.entries[row]
+    }
+
+    private func updateEnvironmentDetails() {
+        guard let entry = selectedEnvironmentEntry() else {
+            environmentKeyField.stringValue = "No variable selected"
+            environmentStatusField.stringValue = "Select a compose variable to inspect env resolution."
+            environmentValueField.stringValue = ""
+            environmentValueField.isEnabled = false
+            environmentSensitiveCheckbox.state = .off
+            environmentSensitiveCheckbox.isEnabled = false
+            environmentNoteField.stringValue = ""
+            environmentGenerateButton?.isEnabled = false
+            environmentSaveButton?.isEnabled = false
+            environmentIgnoreButton?.isEnabled = false
+            environmentExternalButton?.isEnabled = false
+            environmentExternalButton?.title = "Mark as External"
+            updateClipboardPreview()
+            return
+        }
+
+        environmentKeyField.stringValue = entry.key
+        environmentStatusField.stringValue = entry.statusText
+        if let envFileValue = entry.envFileValue {
+            environmentValueField.stringValue = envFileValue
+        } else if entry.hasProfileKeychainValue || entry.hasProjectKeychainValue {
+            environmentValueField.stringValue = ""
+        }
+        environmentValueField.isEnabled = entry.envFileURL != nil || entry.isMissing || entry.isEmptyValue || entry.isMarkedExternal
+
+        let canSaveToKeychain = entry.envFileURL == nil && !entry.isEmptyValue
+        if canSaveToKeychain {
+            let shouldSuggestSensitive = ContextValueGenerator.looksSensitive(key: entry.key)
+            if environmentSensitiveCheckbox.state == .off && shouldSuggestSensitive {
+                environmentSensitiveCheckbox.state = .on
+            }
+        } else {
+            environmentSensitiveCheckbox.state = .off
+        }
+        environmentSensitiveCheckbox.isEnabled = canSaveToKeychain
+
+        if let envFileURL = entry.envFileURL {
+            environmentNoteField.stringValue = "Saving updates \(envFileURL.lastPathComponent). Keychain is disabled because compose already resolves this key from a file."
+        } else if entry.providedByManagedVariables {
+            environmentNoteField.stringValue = "This key is already satisfied by Variable Manager."
+        } else if entry.hasProfileKeychainValue || entry.hasProjectKeychainValue {
+            environmentNoteField.stringValue = "Keychain-backed values are intentionally not displayed here."
+        } else if entry.isMarkedExternal {
+            environmentNoteField.stringValue = "This key is expected from the shell, CI or another external source."
+        } else {
+            environmentNoteField.stringValue = "Missing keys can be generated into .env.devstack or stored in Keychain if sensitive."
+        }
+
+        environmentGenerateButton?.isEnabled = entry.isMissing || entry.isEmptyValue
+        environmentSaveButton?.isEnabled = environmentValueField.isEnabled
+        environmentIgnoreButton?.isEnabled = entry.isMissing || entry.isEmptyValue
+        environmentExternalButton?.isEnabled = entry.isMissing || entry.isMarkedExternal
+        environmentExternalButton?.title = entry.isMarkedExternal ? "Unmark External" : "Mark as External"
+
+        updateClipboardPreview()
+    }
+
+    private func persistEnvironmentValue(
+        key: String,
+        value: String,
+        saveToKeychain: Bool,
+        draftProfile: ProfileDefinition,
+        entry: ComposeEnvironmentEntry
+    ) throws {
+        externalEnvironmentKeys.removeAll { $0 == key }
+        if saveToKeychain {
+            let actualProfileName = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !actualProfileName.isEmpty else {
+                throw ValidationError("Set the profile name before saving a Keychain value.")
+            }
+            var profileForSecrets = draftProfile
+            profileForSecrets.name = actualProfileName
+            try ComposeSupport.saveProfileSecret(key: key, value: value, profile: profileForSecrets)
+            return
+        }
+        try ComposeSupport.saveEnvironmentValue(
+            key: key,
+            value: value,
+            profile: draftProfile,
+            store: store,
+            fileURL: entry.suggestedWriteURL
+        )
+    }
+
+    private func clipboardPreviewRow() -> NSView {
+        let useButton = button(title: "Use Result", action: #selector(useClipboardResultAction(_:)))
+        clipboardUseButton = useButton
+        let stack = NSStackView(views: [clipboardPreviewField, useButton])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 8
+        return stack
+    }
+
+    private func startClipboardObservation() {
+        clipboardTimer?.invalidate()
+        clipboardTimer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.pollClipboard()
+            }
+        }
+        pollClipboard()
+    }
+
+    private func pollClipboard() {
+        let pasteboard = NSPasteboard.general
+        guard pasteboard.changeCount != lastClipboardChangeCount else {
+            return
+        }
+        lastClipboardChangeCount = pasteboard.changeCount
+        let raw = pasteboard.string(forType: .string) ?? ""
+        clipboardParseResult = ClipboardSmartParser.parse(raw)
+        updateClipboardPreview()
+    }
+
+    private func updateClipboardPreview() {
+        if let result = clipboardParseResult {
+            clipboardPreviewField.stringValue = "\(result.title): \(result.preview)"
+            clipboardUseButton?.isHidden = result.value == nil
+            clipboardUseButton?.isEnabled = result.value != nil && selectedEnvironmentEntry() != nil
+        } else {
+            clipboardPreviewField.stringValue = "Clipboard helper watches timestamps, JSON and base64 while this editor is open."
+            clipboardUseButton?.isHidden = true
+            clipboardUseButton?.isEnabled = false
+        }
     }
 
     private func presentError(_ message: String) {
@@ -703,40 +1262,40 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         return panel.urls
     }
 
-    private func reloadServers(preferredName: String?) {
-        servers.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        serverField.removeAllItems()
-        serverField.addItems(withTitles: servers.map(\.name))
-        if let preferredName, serverField.indexOfItem(withTitle: preferredName) >= 0 {
-            serverField.selectItem(withTitle: preferredName)
-        } else if !servers.isEmpty {
-            serverField.selectItem(at: 0)
+    private func reloadRuntimeTargets(preferredName: String?) {
+        runtimeTargets.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        runtimeField.removeAllItems()
+        runtimeField.addItems(withTitles: runtimeTargets.map(\.name))
+        if let preferredName, runtimeField.indexOfItem(withTitle: preferredName) >= 0 {
+            runtimeField.selectItem(withTitle: preferredName)
+        } else if !runtimeTargets.isEmpty {
+            runtimeField.selectItem(at: 0)
         }
-        serverField.isEnabled = !servers.isEmpty
+        runtimeField.isEnabled = !runtimeTargets.isEmpty
     }
 
-    private func selectedServerName() -> String? {
-        let selected = serverField.selectedItem?.title ?? ""
+    private func selectedRuntimeName() -> String? {
+        let selected = runtimeField.selectedItem?.title ?? ""
         return selected.isEmpty ? nil : selected
     }
 
-    private func selectedServer() -> RemoteServerDefinition? {
-        guard let selectedName = selectedServerName() else {
+    private func selectedRuntimeTarget() -> RemoteServerDefinition? {
+        guard let selectedName = selectedRuntimeName() else {
             return nil
         }
-        return servers.first(where: { $0.name == selectedName })
+        return runtimeTargets.first(where: { $0.name == selectedName })
     }
 
-    private func preferredServerName(for profile: ProfileDefinition?) -> String? {
-        if let explicit = profile?.serverName, !explicit.isEmpty {
+    private func preferredRuntimeName(for profile: ProfileDefinition?) -> String? {
+        if let explicit = profile?.runtimeName, !explicit.isEmpty {
             return explicit
         }
 
         guard let profile else {
-            return servers.first?.name
+            return runtimeTargets.first?.name
         }
 
-        if let matched = servers.first(where: {
+        if let matched = runtimeTargets.first(where: {
             $0.dockerContext == profile.dockerContext
                 || $0.remoteDockerServerDisplay == profile.tunnelHost
                 || $0.sshTarget == profile.tunnelHost
@@ -744,29 +1303,29 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
             return matched.name
         }
 
-        return servers.first?.name
+        return runtimeTargets.first?.name
     }
 
-    private func updateServerDetails() {
-        guard let server = selectedServer() else {
-            serverDockerContextField.stringValue = "No server selected"
-            serverRemoteHostField.stringValue = "No server selected"
-            serverSummaryField.stringValue = "Profiles are now bound to saved server definitions. Create a local or SSH server first."
+    private func updateRuntimeDetails() {
+        guard let server = selectedRuntimeTarget() else {
+            runtimeDockerContextField.stringValue = "No runtime selected"
+            runtimeRemoteHostField.stringValue = "No runtime selected"
+            runtimeSummaryField.stringValue = "Profiles are bound to saved runtime targets. Create a local or SSH runtime first."
             return
         }
 
-        serverDockerContextField.stringValue = server.dockerContext
-        serverRemoteHostField.stringValue = server.remoteDockerServerDisplay
-        serverSummaryField.stringValue = server.connectionSummary
+        runtimeDockerContextField.stringValue = server.dockerContext
+        runtimeRemoteHostField.stringValue = server.remoteDockerServerDisplay
+        runtimeSummaryField.stringValue = server.connectionSummary
     }
 
-    private func upsertServer(_ server: RemoteServerDefinition) {
-        removeServer(named: server.name)
-        servers.append(server)
+    private func upsertRuntimeTarget(_ server: RemoteServerDefinition) {
+        removeRuntimeTarget(named: server.name)
+        runtimeTargets.append(server)
     }
 
-    private func removeServer(named name: String) {
-        servers.removeAll { $0.name == name }
+    private func removeRuntimeTarget(named name: String) {
+        runtimeTargets.removeAll { $0.name == name }
     }
 
     private func label(_ text: String) -> NSTextField {
@@ -780,6 +1339,18 @@ final class ProfileEditorWindowController: NSWindowController, NSTableViewDataSo
         let field = NSTextField(labelWithString: text)
         field.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
         return field
+    }
+
+    private func formRow(label text: String, field: NSView) -> NSView {
+        let labelField = NSTextField(labelWithString: text)
+        labelField.font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
+        labelField.alignment = .right
+        field.translatesAutoresizingMaskIntoConstraints = false
+
+        let grid = NSGridView(views: [[labelField, field]])
+        grid.column(at: 0).width = 90
+        grid.columnSpacing = 12
+        return grid
     }
 
     private func button(title: String, action: Selector) -> NSButton {

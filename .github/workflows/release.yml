@@ -9,16 +9,15 @@ on:
 jobs:
   build-release-artifacts:
     runs-on: macos-latest
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build release app bundles
-        run: make app
+      - name: Build release package
+        run: make package
 
-      - name: Upload app bundles
+      - name: Upload installer package
         uses: actions/upload-artifact@v4
         with:
-          name: devstackmenu-app-bundles
-          path: dist/
+          name: devstackmenu-package
+          path: dist/*.pkg

@@ -1,48 +1,48 @@
 import Foundation
 
-struct DockerContextEntry: Sendable {
-    let name: String
-    let endpoint: String
-    let isCurrent: Bool
+package struct DockerContextEntry: Sendable {
+    package let name: String
+    package let endpoint: String
+    package let isCurrent: Bool
 }
 
-enum RemoteServerTransport: String, CaseIterable, Codable, Sendable {
+package enum RemoteServerTransport: String, CaseIterable, Codable, Sendable {
     case ssh
     case local
 
-    var title: String {
+    package var title: String {
         switch self {
         case .ssh:
-            return "SSH Remote Host"
+            return "Remote SSH Runtime"
         case .local:
-            return "Local Docker"
+            return "Local Docker Context"
         }
     }
 
     var summary: String {
         switch self {
         case .ssh:
-            return "Use Docker on a remote host over SSH and create a managed Docker context for it."
+            return "Use Docker on a remote host over SSH and create a managed runtime target for it."
         case .local:
             return "Use an existing local Docker context on this Mac without SSH tunnels."
         }
     }
 }
 
-struct RemoteServerDefinition: Codable, Equatable, Sendable {
-    var name = ""
-    var transport: RemoteServerTransport = .ssh
-    var dockerContext = ""
-    var sshHost = ""
-    var sshPort = 22
-    var sshUser = "root"
-    var remoteDataRoot = "/var/lib/devstackmenu"
+package struct RemoteServerDefinition: Codable, Equatable, Sendable {
+    package var name = ""
+    package var transport: RemoteServerTransport = .ssh
+    package var dockerContext = ""
+    package var sshHost = ""
+    package var sshPort = 22
+    package var sshUser = "root"
+    package var remoteDataRoot = "/var/lib/devstackmenu"
 
-    var isLocal: Bool {
+    package var isLocal: Bool {
         transport == .local
     }
 
-    var sshTarget: String {
+    package var sshTarget: String {
         guard !isLocal else {
             return ""
         }
@@ -57,19 +57,19 @@ struct RemoteServerDefinition: Codable, Equatable, Sendable {
         return "ssh://\(sshUser)@\(sshHost)\(portSuffix)"
     }
 
-    var remoteDockerServerDisplay: String {
+    package var remoteDockerServerDisplay: String {
         guard !isLocal else {
             return "local"
         }
         return sshPort == 22 ? sshTarget : "\(sshTarget):\(sshPort)"
     }
 
-    var connectionSummary: String {
+    package var connectionSummary: String {
         switch transport {
         case .local:
-            return "Local context \(dockerContext)"
+            return "Local runtime on \(dockerContext)"
         case .ssh:
-            return "\(remoteDockerServerDisplay) -> \(dockerContext)"
+            return "\(remoteDockerServerDisplay) via \(dockerContext)"
         }
     }
 
@@ -86,7 +86,7 @@ struct RemoteServerDefinition: Codable, Equatable, Sendable {
         "\(remoteProfileDirectory(for: profileName))/project"
     }
 
-    func normalized() throws -> RemoteServerDefinition {
+    package func normalized() throws -> RemoteServerDefinition {
         var copy = self
         copy.name = copy.name.trimmingCharacters(in: .whitespacesAndNewlines)
         copy.dockerContext = copy.dockerContext.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -96,7 +96,7 @@ struct RemoteServerDefinition: Codable, Equatable, Sendable {
         copy.sshPort = copy.sshPort > 0 ? copy.sshPort : 22
 
         guard !copy.name.isEmpty else {
-            throw ValidationError("Server name is required.")
+            throw ValidationError("Runtime name is required.")
         }
 
         switch copy.transport {
@@ -122,7 +122,7 @@ struct RemoteServerDefinition: Codable, Equatable, Sendable {
 
     init() {}
 
-    init(
+    package init(
         name: String = "",
         transport: RemoteServerTransport = .ssh,
         dockerContext: String = "",
@@ -140,7 +140,7 @@ struct RemoteServerDefinition: Codable, Equatable, Sendable {
         self.remoteDataRoot = remoteDataRoot
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
         transport = try container.decodeIfPresent(RemoteServerTransport.self, forKey: .transport) ?? .ssh
@@ -199,7 +199,7 @@ struct ServiceRuntimeSnapshot: Codable, Sendable {
     let listening: Bool
 }
 
-struct AppSnapshot: Codable, Sendable {
+package struct AppSnapshot: Codable, Sendable {
     let profile: String
     let configuredDockerContext: String
     let activeDockerContext: String
@@ -252,7 +252,7 @@ struct ComposeDefinition: Codable, Equatable, Sendable {
         self.content = content
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         projectName = try container.decodeIfPresent(String.self, forKey: .projectName) ?? ""
         workingDirectory = try container.decodeIfPresent(String.self, forKey: .workingDirectory) ?? ""
@@ -264,7 +264,7 @@ struct ComposeDefinition: Codable, Equatable, Sendable {
     }
 }
 
-struct ServiceDefinition: Codable, Equatable, Sendable {
+package struct ServiceDefinition: Codable, Equatable, Sendable {
     var name = ""
     var role = "generic"
     var aliasHost = ""
@@ -320,24 +320,30 @@ struct ManagedVariableDefinition: Codable, Equatable, Sendable {
     }
 }
 
-struct ProfileDefinition: Codable, Equatable, Sendable {
-    var name = ""
-    var serverName = ""
-    var dockerContext = "default"
-    var tunnelHost = "docker"
+package struct ProfileDefinition: Codable, Equatable, Sendable {
+    package var name = ""
+    package var runtimeName = ""
+    package var dockerContext = "default"
+    package var tunnelHost = "docker"
     var shellExports: [String] = []
-    var services: [ServiceDefinition] = []
+    package var externalEnvironmentKeys: [String] = []
+    package var services: [ServiceDefinition] = []
     var compose = ComposeDefinition()
+
+    var serverName: String {
+        get { runtimeName }
+        set { runtimeName = newValue }
+    }
 
     var remoteDockerServer: String {
         get { tunnelHost }
         set { tunnelHost = newValue }
     }
 
-    func normalized() throws -> ProfileDefinition {
+    package func normalized() throws -> ProfileDefinition {
         var copy = self
         copy.name = copy.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        copy.serverName = copy.serverName.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.runtimeName = copy.runtimeName.trimmingCharacters(in: .whitespacesAndNewlines)
         copy.dockerContext = trimmedOrDefault(copy.dockerContext, defaultValue: "default")
         copy.tunnelHost = trimmedOrDefault(copy.tunnelHost, defaultValue: "docker")
         copy.compose.projectName = copy.compose.projectName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -349,6 +355,13 @@ struct ProfileDefinition: Codable, Equatable, Sendable {
         copy.shellExports = copy.shellExports
             .map { $0.trimmingCharacters(in: .newlines) }
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        copy.externalEnvironmentKeys = Array(
+            Set(
+                copy.externalEnvironmentKeys
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            )
+        ).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
 
         guard !copy.name.isEmpty else {
             throw ValidationError("Profile name is required.")
@@ -437,27 +450,57 @@ struct ProfileDefinition: Codable, Equatable, Sendable {
         dockerContext: String = "default",
         tunnelHost: String = "docker",
         shellExports: [String] = [],
+        externalEnvironmentKeys: [String] = [],
         services: [ServiceDefinition] = [],
         compose: ComposeDefinition = ComposeDefinition()
     ) {
         self.name = name
-        self.serverName = serverName
+        runtimeName = serverName
         self.dockerContext = dockerContext
         self.tunnelHost = tunnelHost
         self.shellExports = shellExports
+        self.externalEnvironmentKeys = externalEnvironmentKeys
         self.services = services
         self.compose = compose
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
-        serverName = try container.decodeIfPresent(String.self, forKey: .serverName) ?? ""
+        runtimeName =
+            try container.decodeIfPresent(String.self, forKey: .runtimeName)
+            ?? container.decodeIfPresent(String.self, forKey: .serverName)
+            ?? ""
         dockerContext = try container.decodeIfPresent(String.self, forKey: .dockerContext) ?? "default"
         tunnelHost = try container.decodeIfPresent(String.self, forKey: .tunnelHost) ?? "docker"
         shellExports = try container.decodeIfPresent([String].self, forKey: .shellExports) ?? []
+        externalEnvironmentKeys = try container.decodeIfPresent([String].self, forKey: .externalEnvironmentKeys) ?? []
         services = try container.decodeIfPresent([ServiceDefinition].self, forKey: .services) ?? []
         compose = try container.decodeIfPresent(ComposeDefinition.self, forKey: .compose) ?? ComposeDefinition()
+    }
+
+    package func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(runtimeName, forKey: .runtimeName)
+        try container.encode(dockerContext, forKey: .dockerContext)
+        try container.encode(tunnelHost, forKey: .tunnelHost)
+        try container.encode(shellExports, forKey: .shellExports)
+        try container.encode(externalEnvironmentKeys, forKey: .externalEnvironmentKeys)
+        try container.encode(services, forKey: .services)
+        try container.encode(compose, forKey: .compose)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case runtimeName
+        case serverName
+        case dockerContext
+        case tunnelHost
+        case shellExports
+        case externalEnvironmentKeys
+        case services
+        case compose
     }
 
     private func normalize(service: ServiceDefinition, profile: ProfileDefinition) throws -> ServiceDefinition {
@@ -722,10 +765,11 @@ enum Shell {
     }
 }
 
-struct ProfileStore: Sendable {
+package struct ProfileStore: Sendable {
     let rootDirectory: URL
     let profilesDirectory: URL
     let serversDirectory: URL
+    let legacyServersDirectory: URL
     let managedVariablesFile: URL
     let currentProfileFile: URL
     let activeProfilesFile: URL
@@ -733,7 +777,7 @@ struct ProfileStore: Sendable {
     let logsDirectory: URL
     let launchAgentsDirectory: URL
 
-    init() {
+    package init() {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? home.appendingPathComponent("Library/Application Support", isDirectory: true)
@@ -747,13 +791,18 @@ struct ProfileStore: Sendable {
     init(rootDirectory: URL, logsDirectory: URL, launchAgentsDirectory: URL) {
         self.rootDirectory = rootDirectory
         profilesDirectory = rootDirectory.appendingPathComponent("profiles", isDirectory: true)
-        serversDirectory = rootDirectory.appendingPathComponent("servers", isDirectory: true)
+        serversDirectory = rootDirectory.appendingPathComponent("runtimes", isDirectory: true)
+        legacyServersDirectory = rootDirectory.appendingPathComponent("servers", isDirectory: true)
         managedVariablesFile = rootDirectory.appendingPathComponent("managed-vars.json", isDirectory: false)
         currentProfileFile = rootDirectory.appendingPathComponent("current-profile", isDirectory: false)
         activeProfilesFile = rootDirectory.appendingPathComponent("active-profiles.json", isDirectory: false)
         generatedDirectory = rootDirectory.appendingPathComponent("generated", isDirectory: true)
         self.logsDirectory = logsDirectory
         self.launchAgentsDirectory = launchAgentsDirectory
+    }
+
+    var runtimesDirectory: URL {
+        serversDirectory
     }
 
     func profileNames() throws -> [String] {
@@ -774,7 +823,7 @@ struct ProfileStore: Sendable {
             .sorted()
     }
 
-    func loadProfile(named name: String) throws -> ProfileDefinition {
+    package func loadProfile(named name: String) throws -> ProfileDefinition {
         let url = profileURL(named: name)
         let data = try Data(contentsOf: url)
         let decoder = JSONDecoder()
@@ -784,20 +833,29 @@ struct ProfileStore: Sendable {
 
     func serverNames() throws -> [String] {
         let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: serversDirectory.path) else {
-            return []
+        var urls: [URL] = []
+
+        if fileManager.fileExists(atPath: serversDirectory.path) {
+            urls += try fileManager.contentsOfDirectory(
+                at: serversDirectory,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
         }
 
-        let urls = try fileManager.contentsOfDirectory(
-            at: serversDirectory,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        )
+        if fileManager.fileExists(atPath: legacyServersDirectory.path) {
+            urls += try fileManager.contentsOfDirectory(
+                at: legacyServersDirectory,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
+        }
 
-        return urls
+        return Set(urls
             .filter { $0.pathExtension == "json" }
             .map { $0.deletingPathExtension().lastPathComponent }
-            .sorted()
+        )
+        .sorted()
     }
 
     func remoteServers() throws -> [RemoteServerDefinition] {
@@ -805,14 +863,14 @@ struct ProfileStore: Sendable {
     }
 
     func loadServer(named name: String) throws -> RemoteServerDefinition {
-        let url = serverURL(named: name)
+        let url = preferredServerURL(named: name)
         let data = try Data(contentsOf: url)
         let decoder = JSONDecoder()
         let server = try decoder.decode(RemoteServerDefinition.self, from: data)
         return try server.normalized()
     }
 
-    func saveProfile(_ profile: ProfileDefinition, originalName: String?) throws {
+    package func saveProfile(_ profile: ProfileDefinition, originalName: String?) throws {
         let normalized = try profile.normalized()
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: profilesDirectory, withIntermediateDirectories: true)
@@ -844,10 +902,10 @@ struct ProfileStore: Sendable {
         try fileManager.createDirectory(at: serversDirectory, withIntermediateDirectories: true)
 
         let targetURL = serverURL(named: normalized.name)
-        let originalURL = originalName.map { serverURL(named: $0) }
+        let originalURL = originalName.map { preferredServerURL(named: $0) }
 
         if originalName != normalized.name && fileManager.fileExists(atPath: targetURL.path) {
-            throw ValidationError("Server '\(normalized.name)' already exists.")
+            throw ValidationError("Runtime '\(normalized.name)' already exists.")
         }
 
         let encoder = JSONEncoder()
@@ -858,16 +916,41 @@ struct ProfileStore: Sendable {
         if let originalURL, originalURL != targetURL, fileManager.fileExists(atPath: originalURL.path) {
             try fileManager.removeItem(at: originalURL)
         }
-    }
 
-    func deleteServer(named name: String) throws {
-        let url = serverURL(named: name)
-        if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
+        let legacyURL = legacyServerURL(named: normalized.name)
+        if fileManager.fileExists(atPath: legacyURL.path) {
+            try? fileManager.removeItem(at: legacyURL)
         }
     }
 
-    func currentProfileName() -> String? {
+    func deleteServer(named name: String) throws {
+        let fileManager = FileManager.default
+        for url in [serverURL(named: name), legacyServerURL(named: name)] where fileManager.fileExists(atPath: url.path) {
+            try fileManager.removeItem(at: url)
+        }
+    }
+
+    func runtimeNames() throws -> [String] {
+        try serverNames()
+    }
+
+    package func runtimeTargets() throws -> [RemoteServerDefinition] {
+        try remoteServers()
+    }
+
+    func loadRuntime(named name: String) throws -> RemoteServerDefinition {
+        try loadServer(named: name)
+    }
+
+    package func saveRuntime(_ runtime: RemoteServerDefinition, originalName: String?) throws {
+        try saveServer(runtime, originalName: originalName)
+    }
+
+    func deleteRuntime(named name: String) throws {
+        try deleteServer(named: name)
+    }
+
+    package func currentProfileName() -> String? {
         guard let text = try? String(contentsOf: currentProfileFile, encoding: .utf8) else {
             return nil
         }
@@ -1019,10 +1102,11 @@ struct ProfileStore: Sendable {
         }
     }
 
-    func ensureRuntimeDirectories() throws {
+    package func ensureRuntimeDirectories() throws {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: profilesDirectory, withIntermediateDirectories: true)
+        try migrateLegacyServersDirectoryIfNeeded(fileManager: fileManager)
         try fileManager.createDirectory(at: serversDirectory, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: generatedDirectory, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: logsDirectory, withIntermediateDirectories: true)
@@ -1136,6 +1220,10 @@ struct ProfileStore: Sendable {
         serversDirectory.appendingPathComponent("\(name).json", isDirectory: false)
     }
 
+    func legacyServerURL(named name: String) -> URL {
+        legacyServersDirectory.appendingPathComponent("\(name).json", isDirectory: false)
+    }
+
     func launchAgentPrefix(for profileName: String) -> String {
         "local.devstackmenu.\(slugify(profileName))"
     }
@@ -1165,6 +1253,35 @@ struct ProfileStore: Sendable {
 
         return urls.filter {
             $0.lastPathComponent.hasPrefix(prefix + ".") && $0.pathExtension == "plist"
+        }
+    }
+
+    private func preferredServerURL(named name: String) -> URL {
+        let runtimeURL = serverURL(named: name)
+        if FileManager.default.fileExists(atPath: runtimeURL.path) {
+            return runtimeURL
+        }
+        return legacyServerURL(named: name)
+    }
+
+    private func migrateLegacyServersDirectoryIfNeeded(fileManager: FileManager) throws {
+        guard fileManager.fileExists(atPath: legacyServersDirectory.path) else {
+            return
+        }
+
+        try fileManager.createDirectory(at: serversDirectory, withIntermediateDirectories: true)
+        let legacyURLs = try fileManager.contentsOfDirectory(
+            at: legacyServersDirectory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
+
+        for legacyURL in legacyURLs where legacyURL.pathExtension == "json" {
+            let targetURL = serversDirectory.appendingPathComponent(legacyURL.lastPathComponent, isDirectory: false)
+            if fileManager.fileExists(atPath: targetURL.path) {
+                continue
+            }
+            try fileManager.copyItem(at: legacyURL, to: targetURL)
         }
     }
 }

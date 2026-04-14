@@ -64,7 +64,31 @@ struct ComposeSecretOverview: Sendable {
     let projectServiceName: String
 }
 
-enum ComposeSupport {
+package struct ComposeEnvironmentEntry: Sendable {
+    package let key: String
+    package let statusText: String
+    package let envFileURL: URL?
+    let envFileValue: String?
+    package let suggestedWriteURL: URL?
+    let providedByManagedVariables: Bool
+    let hasProfileKeychainValue: Bool
+    let hasProjectKeychainValue: Bool
+    package let isMarkedExternal: Bool
+    package let isMissing: Bool
+    package let isEmptyValue: Bool
+}
+
+package struct ComposeEnvironmentOverview: Sendable {
+    package let workingDirectory: URL
+    let profileEnvironmentFile: URL
+    let environmentFiles: [URL]
+    let referencedKeys: [String]
+    package let entries: [ComposeEnvironmentEntry]
+    let profileServiceName: String
+    let projectServiceName: String
+}
+
+package enum ComposeSupport {
     static func plan(profile: ProfileDefinition, store: ProfileStore) throws -> ComposePlan {
         let workingDirectory = composeWorkingDirectory(for: profile, store: store)
         let sourceComposeURLs = try composeSourceURLs(for: profile, store: store)
@@ -517,7 +541,8 @@ enum ComposeSupport {
                 continue
             }
 
-            let key = line[..<separator].trimmingCharacters(in: .whitespaces)
+            let rawKey = line[..<separator].trimmingCharacters(in: .whitespaces)
+            let key = rawKey.replacingOccurrences(of: #"^export\s+"#, with: "", options: .regularExpression)
             let value = String(line[line.index(after: separator)...])
             if !key.isEmpty {
                 values[key] = value
@@ -540,7 +565,7 @@ enum ComposeSupport {
 
         var envSourceByKey: [String: URL] = [:]
         for url in environmentFiles {
-            for key in parseEnvironmentFile(at: url).keys {
+            for key in parseEnvironmentFile(at: url).keys where envSourceByKey[key] == nil {
                 envSourceByKey[key] = url
             }
         }
@@ -566,6 +591,8 @@ enum ComposeSupport {
                 statusText = "Stored in Keychain for this profile"
             } else if hasProjectKeychainValue {
                 statusText = "Inherited from project Keychain"
+            } else if profile.externalEnvironmentKeys.contains(key) {
+                statusText = "Marked as external"
             } else {
                 statusText = "Missing"
             }
@@ -590,7 +617,7 @@ enum ComposeSupport {
         )
     }
 
-    static func saveProfileSecret(key: String, value: String, profile: ProfileDefinition) throws {
+    package static func saveProfileSecret(key: String, value: String, profile: ProfileDefinition) throws {
         let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedKey.isEmpty else {
             throw ValidationError("Secret key is required.")
@@ -611,6 +638,154 @@ enum ComposeSupport {
             account: trimmedKey,
             serviceName: profileSecretServiceName(for: profile)
         )
+    }
+
+    package static func environmentOverview(
+        profile: ProfileDefinition,
+        store: ProfileStore,
+        ignoredKeys: Set<String> = []
+    ) throws -> ComposeEnvironmentOverview {
+        let workingDirectory = composeWorkingDirectory(for: profile, store: store)
+        let sourceComposeURLs = try composeSourceURLs(for: profile, store: store)
+        let environmentFiles = projectEnvironmentFiles(in: workingDirectory)
+        let managedVariables = try applicableManagedVariables(profile: profile, store: store)
+        let referencedKeys = referencedEnvironmentKeys(
+            in: composeReferenceText(profile: profile, sourceComposeURLs: sourceComposeURLs)
+        )
+        let sortedReferencedKeys = referencedKeys
+            .filter { !ignoredKeys.contains($0) }
+            .sorted()
+        let profileServiceName = profileSecretServiceName(for: profile)
+        let projectServiceName = projectSecretServiceName(for: workingDirectory)
+        let profileEnvironmentFile = environmentFileURL(for: profile, store: store)
+
+        var envSourceByKey: [String: URL] = [:]
+        var envValueByKey: [String: String] = [:]
+        for url in environmentFiles {
+            let values = parseEnvironmentFile(at: url)
+            for (key, value) in values where envSourceByKey[key] == nil {
+                envSourceByKey[key] = url
+                envValueByKey[key] = value
+            }
+        }
+
+        let managedVariableNames = Set(managedVariables.map(\.name))
+        let entries = sortedReferencedKeys.map { key in
+            let envFileURL = envSourceByKey[key]
+            let envFileValue = envValueByKey[key]
+            let providedByManagedVariables = managedVariableNames.contains(key)
+            let hasProfileKeychainValue = KeychainSecretStore.lookup(
+                account: key,
+                serviceNames: [profileServiceName]
+            ) != nil
+            let hasProjectKeychainValue = profileServiceName == projectServiceName
+                ? false
+                : KeychainSecretStore.lookup(account: key, serviceNames: [projectServiceName]) != nil
+            let isMarkedExternal = profile.externalEnvironmentKeys.contains(key)
+            let isEmptyValue = (envFileValue?.isEmpty == true)
+
+            let statusText: String
+            let isMissing: Bool
+            let suggestedWriteURL: URL?
+            if let envFileURL {
+                if isEmptyValue {
+                    statusText = "Empty in \(envFileURL.lastPathComponent)"
+                    isMissing = true
+                } else {
+                    statusText = "Provided by \(envFileURL.lastPathComponent)"
+                    isMissing = false
+                }
+                suggestedWriteURL = envFileURL
+            } else if providedByManagedVariables {
+                statusText = "Provided by Variable Manager"
+                isMissing = false
+                suggestedWriteURL = nil
+            } else if hasProfileKeychainValue {
+                statusText = "Stored in Keychain for this profile"
+                isMissing = false
+                suggestedWriteURL = nil
+            } else if hasProjectKeychainValue {
+                statusText = "Inherited from project Keychain"
+                isMissing = false
+                suggestedWriteURL = nil
+            } else if isMarkedExternal {
+                statusText = "Marked as external"
+                isMissing = false
+                suggestedWriteURL = profileEnvironmentFile
+            } else {
+                statusText = "Missing"
+                isMissing = true
+                suggestedWriteURL = profileEnvironmentFile
+            }
+
+            return ComposeEnvironmentEntry(
+                key: key,
+                statusText: statusText,
+                envFileURL: envFileURL,
+                envFileValue: envFileValue,
+                suggestedWriteURL: suggestedWriteURL,
+                providedByManagedVariables: providedByManagedVariables,
+                hasProfileKeychainValue: hasProfileKeychainValue,
+                hasProjectKeychainValue: hasProjectKeychainValue,
+                isMarkedExternal: isMarkedExternal,
+                isMissing: isMissing,
+                isEmptyValue: isEmptyValue
+            )
+        }
+
+        return ComposeEnvironmentOverview(
+            workingDirectory: workingDirectory,
+            profileEnvironmentFile: profileEnvironmentFile,
+            environmentFiles: environmentFiles,
+            referencedKeys: sortedReferencedKeys,
+            entries: entries,
+            profileServiceName: profileServiceName,
+            projectServiceName: projectServiceName
+        )
+    }
+
+    package static func saveEnvironmentValue(
+        key: String,
+        value: String,
+        profile: ProfileDefinition,
+        store: ProfileStore,
+        fileURL: URL?
+    ) throws {
+        let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedKey.isEmpty else {
+            throw ValidationError("Environment key is required.")
+        }
+
+        let targetURL = fileURL ?? environmentFileURL(for: profile, store: store)
+        try FileManager.default.createDirectory(at: targetURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let line = "\(trimmedKey)=\(shellSafeEnvironmentValue(value))"
+        let existingText = (try? String(contentsOf: targetURL, encoding: .utf8)) ?? ""
+        let lineEnding = existingText.contains("\r\n") ? "\r\n" : "\n"
+        let pattern = #"^\s*(?:export\s+)?"# + NSRegularExpression.escapedPattern(for: trimmedKey) + #"\s*="#
+
+        var replaced = false
+        let updatedLines = existingText
+            .split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            .map(String.init)
+            .map { currentLine -> String in
+                guard currentLine.range(of: pattern, options: .regularExpression) != nil else {
+                    return currentLine
+                }
+                replaced = true
+                return line
+            }
+
+        let finalText: String
+        if replaced {
+            finalText = updatedLines.joined(separator: lineEnding)
+        } else if existingText.isEmpty {
+            finalText = line + lineEnding
+        } else {
+            let suffix = existingText.hasSuffix("\n") || existingText.hasSuffix("\r\n") ? "" : lineEnding
+            finalText = existingText + suffix + line + lineEnding
+        }
+
+        try finalText.write(to: targetURL, atomically: true, encoding: .utf8)
     }
 
     static func applicableManagedVariables(
@@ -748,6 +923,11 @@ enum ComposeSupport {
         }
 
         return result
+    }
+
+    private static func environmentFileURL(for profile: ProfileDefinition, store: ProfileStore) -> URL {
+        composeWorkingDirectory(for: profile, store: store)
+            .appendingPathComponent(".env.devstack", isDirectory: false)
     }
 
     private static func secretServiceNames(profile: ProfileDefinition, workingDirectory: URL) -> [String] {

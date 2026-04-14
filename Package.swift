@@ -12,6 +12,10 @@ let package = Package(
             targets: ["DevStackCore"]
         ),
         .executable(
+            name: "dx",
+            targets: ["dx"]
+        ),
+        .executable(
             name: "DevStackMenu",
             targets: ["DevStackMenu"]
         ),
@@ -23,6 +27,10 @@ let package = Package(
     targets: [
         .target(
             name: "DevStackCore"
+        ),
+        .executableTarget(
+            name: "dx",
+            dependencies: ["DevStackCore"]
         ),
         .executableTarget(
             name: "DevStackMenu",

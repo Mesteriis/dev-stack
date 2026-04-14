@@ -10,7 +10,7 @@ DevStackMenu is a self-contained macOS menu bar app for managing remote Docker a
 It provides a native AppKit UI for:
 
 - inspecting status, active profiles, Docker context and compact runtime metrics
-- creating managed Docker server entries for local and SSH-backed runtimes
+- creating managed runtime targets for local Docker contexts and SSH-backed remote hosts
 - switching profiles and Docker contexts without relying on an external helper CLI
 - starting or stopping tunnel and compose actions
 - managing shared env variables and profile-scoped secrets
@@ -55,14 +55,28 @@ To install them into `~/Applications`, run:
 make install-local
 ```
 
+For a release-style install, build and install the package artifact:
+
+```sh
+make package
+make install-package
+```
+
+The installer places:
+
+- `DevStackMenu.app` and `Import Compose To DX.app` into `/Applications`
+- `dx` into `/usr/local/bin`
+
+This `.pkg` is the primary release artifact built by CI.
+
 ## What It Does
 
-- shows the current active profile, managed server, tunnel state, Docker context and compact metrics in the macOS menu bar
-- stores reusable server definitions in `~/Library/Application Support/DevStackMenu/servers`
+- shows the current active profile, managed runtime, tunnel state, Docker context and compact metrics in the macOS menu bar
+- stores reusable runtime target definitions in `~/Library/Application Support/DevStackMenu/runtimes`
 - stores imported profile metadata in `~/Library/Application Support/DevStackMenu/profiles`
 - stores managed shared env variables in `~/Library/Application Support/DevStackMenu/managed-vars.json`
 - uses a runtime lock file at `~/Library/Application Support/DevStackMenu/app.lock` to keep only one app instance alive
-- provides a `New Server…` wizard that verifies SSH access, creates the Docker context and can bootstrap Docker on apt-based remote hosts
+- provides a `New Runtime…` wizard that verifies SSH access, creates the Docker context and can bootstrap Docker on apt-based remote hosts
 - switches profiles and Docker contexts without leaving the desktop
 - can keep multiple profiles active across different projects while switching safely inside the same project
 - prevents duplicate menu bar instances and re-focuses the already running app instead
@@ -86,10 +100,10 @@ Typical flow for a remote build host:
 
 1. install the app with `make install-local`
 2. open `DevStackMenu`
-3. choose `New Server…`
+3. choose `New Runtime…`
 4. enter the SSH host, user and desired Docker context name
-5. let the wizard verify or bootstrap Docker and save the server entry
-6. create a profile that targets that saved server
+5. let the wizard verify or bootstrap Docker and save the runtime target
+6. create a profile that targets that saved runtime
 
 ## Functional Focus
 
@@ -97,7 +111,7 @@ Current functional priorities:
 
 - making compose import more tolerant of real-world compose files
 - keeping the built-in runtime predictable when switching active profiles
-- evolving server setup UX around remote Docker preparation and local container modes
+- evolving runtime setup UX around remote Docker preparation and local container modes
 
 Current limitations:
 
@@ -109,18 +123,115 @@ Current limitations:
 - distribution artifacts are currently unsigned
 - UI automation is not in place yet; verification is build + smoke-check oriented
 
+## Context Utilities
+
+DevStackMenu keeps utilities inside the workflows that already exist instead of adding a separate toolbox.
+
+Current V1 utilities:
+
+- `Compose Environment` inside the profile editor detects `${VAR}` references from the compose config, shows which values are missing, empty, external, managed or already satisfied by Keychain, and lets you fix them in place.
+- Missing or empty compose variables can generate values directly from the editor using:
+  - secure random strings (`32` or `64`)
+  - `UUID v4`
+  - `UUID v7`
+- While the profile editor is open, DevStack watches the clipboard for Unix timestamps, JSON and base64, then shows a quiet inline preview you can reuse while filling compose env values.
+
+Small examples:
+
+```text
+JWT_SECRET is missing
+-> Generate…
+-> Secure Random (64)
+-> Save in Keychain
+```
+
+```text
+SESSION_ID is missing
+-> Generate…
+-> UUID v7
+-> Save to .env.devstack
+```
+
+```text
+Copied: 1716000000
+-> editor shows Clipboard: Unix timestamp -> 2024-05-18T...
+-> Use Result
+```
+
+## CLI
+
+DevStackMenu remains the native control plane. The `dx` executable is a thin terminal entrypoint into the same profiles, runtimes, compose parsing and env validation rules that the app already uses.
+
+Build it with the rest of the package:
+
+```sh
+swift build
+.build/debug/dx status
+```
+
+If `dx` is not on your `PATH` yet, you can run the same commands through SwiftPM as `swift run dx <command>`.
+
+Primary V1 flow from a project directory:
+
+```sh
+cd /path/to/project
+dx add profile -f docker-compose.yml
+```
+
+That wizard reuses the app import flow and asks only for:
+
+- profile name
+- runtime target
+- optional compose overlays
+- how to resolve missing `${VAR}` references
+
+Other supported commands:
+
+```sh
+dx add server
+dx use profile state-corp-backend
+dx status
+dx env check --profile state-corp-backend
+dx up
+dx down
+```
+
+Small examples:
+
+```text
+$ dx status
+Profile: state-corp-backend
+Runtime: remote-192-168-1-33
+Docker context: srv-remote-192-168-1-33
+Tunnel: loaded
+Compose: state-corp-backend (3 running)
+```
+
+```text
+$ dx env check --profile state-corp-backend
+Profile: state-corp-backend
+Working directory: /Users/avm/projects/Work/ecos/state-corp-backend
+Compose refs: 8
+Unresolved: 1
+Environment:
+- JWT_SECRET -> Unresolved
+- POSTGRES_DB -> .env
+- REDIS_URL -> Variable Manager
+```
+
+If you run an interactive command in a non-interactive shell, `dx` fails clearly and asks you to rerun it in a TTY.
+
 ## Menu Model
 
 The current top-level menu is intentionally operational:
 
 - `Status`
 - current profile name or `Select Profile`
-- `Servers`
+- `Runtimes`
 - `Variables`
 - `AI CLI Limits`
-- `Docker Contexts`
 
-Profile-specific actions stay under the current-profile item so switching, runtime control, compose actions, secrets and deletion live in one place.
+Profile-specific actions stay under the current-profile item so switching, runtime control, compose actions, secrets and deletion live in one place. Raw Docker contexts are now grouped inside `Runtimes`, not split into a separate top-level menu.
 
 ## Development
 
@@ -131,6 +242,8 @@ make build
 make test
 make app
 make check
+make package
+make install-package
 make clean
 ```
 
@@ -144,6 +257,7 @@ Repository layout:
 .
 ├── Sources/
 │   ├── DevStackCore/      # AppKit UI + profile/runtime logic
+│   ├── dx/                # thin CLI entrypoint
 │   └── DevStackMenu/      # executable entry point
 ├── Sources/DevStackSmokeTests/  # parser and normalization smoke checks
 ├── Resources/             # Info.plist and AppleScript helper
@@ -157,6 +271,8 @@ Repository layout:
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [RELEASING.md](RELEASING.md)
 - [SUPPORT.md](SUPPORT.md)
+- [docs/index.md](docs/index.md) as the documentation hub
+- GitHub Docs workflow in [`.github/workflows/docs.yml`](/Users/avm/projects/Personal/DevSteck/.github/workflows/docs.yml)
 
 ## Contributing
 

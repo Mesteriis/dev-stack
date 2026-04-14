@@ -15,7 +15,7 @@ The repository is intentionally small and split into three main targets:
 The app is self-contained at the orchestration layer:
 
 - it stores profiles in its own Application Support directory
-- it stores reusable server definitions in its own Application Support directory
+- it stores reusable runtime target definitions in its own Application Support directory
 - it stores managed shared env variables in its own Application Support directory
 - it keeps managed bind-mount data next to the source compose project under `data/<service>`
 - it switches Docker contexts directly through the Docker CLI
@@ -45,21 +45,21 @@ Owns the status item, menus, refresh loop and user actions.
 Shared models and helpers:
 
 - profile definitions
-- remote server definitions
+- runtime target definitions
 - validation and normalization
 - CLI path resolution
 - shell execution
-- profile and server storage
+- profile and runtime-target storage
 - compose parsing helpers
 - managed variable storage
 
 ### `Sources/DevStackCore/ProfileEditor.swift`
 
-The AppKit editor for creating and updating DevStack profiles and services, including server selection and multi-file compose overlays.
+The AppKit editor for creating and updating DevStack profiles and services, including runtime-target selection and multi-file compose overlays.
 
 ### `Sources/DevStackCore/ServerWizard.swift`
 
-The AppKit setup flow for defining local or SSH-backed Docker servers and preparing their Docker contexts.
+The AppKit setup flow for defining local or SSH-backed runtime targets and preparing their Docker contexts.
 
 ### `Sources/DevStackCore/ComposeImport.swift`
 
@@ -86,7 +86,7 @@ Git and IDE integration used for branch hints, file watching and startup prompts
 Profiles are stored outside the repository in the user's home directory:
 
 - `~/Library/Application Support/DevStackMenu/profiles/*.json`
-- `~/Library/Application Support/DevStackMenu/servers/*.json`
+- `~/Library/Application Support/DevStackMenu/runtimes/*.json`
 - `~/Library/Application Support/DevStackMenu/managed-vars.json`
 - `~/Library/Application Support/DevStackMenu/current-profile`
 - `~/Library/Application Support/DevStackMenu/active-profiles.json`
@@ -111,6 +111,12 @@ The package build creates the executable. App bundle assembly is handled separat
 3. assembles `DevStackMenu.app` in `dist/`
 4. compiles the AppleScript helper app used for compose-file opening integration with its own bundle identifier
 
+Release distribution is produced through `Scripts/package-release.sh` and uses an unsigned `.pkg` artifact containing:
+
+1. `DevStackMenu.app` in `/Applications`
+2. `Import Compose To DX.app` in `/Applications`
+3. `dx` binary in `/usr/local/bin`
+
 ## Design Constraints
 
 - macOS-only by design
@@ -121,6 +127,6 @@ The package build creates the executable. App bundle assembly is handled separat
 ## Current Limitations
 
 - canonical compose planning depends on `docker compose config`; the fallback parser exists only for degraded import scenarios
-- remote host bootstrap is currently optimized for apt-based Linux servers
+- remote host bootstrap is currently optimized for apt-based Linux dev hosts
 - the UI is AppKit code-first and not yet separated into smaller presentation components
 - smoke checks validate critical logic, but there is no full UI automation

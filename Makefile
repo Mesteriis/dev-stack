@@ -1,6 +1,6 @@
 SWIFT ?= swift
 
-.PHONY: build test app check install-local clean
+.PHONY: build test app package install-package install-local clean
 
 build:
 	$(SWIFT) build
@@ -11,7 +11,18 @@ test:
 app:
 	./Scripts/build-app.sh
 
-check: build test app
+package:
+	./Scripts/package-release.sh
+
+install-package:
+	@PACKAGE_PATH=$$(ls "$(PWD)/dist"/DevStackMenu-*.pkg 2>/dev/null | head -n 1); \
+	if [ -z "$$PACKAGE_PATH" ]; then \
+		echo "No package found. Run \`make package\` first."; \
+		exit 1; \
+	fi; \
+	sudo installer -pkg "$$PACKAGE_PATH" -target /
+
+check: build test package
 
 install-local:
 	./Scripts/install-local.sh

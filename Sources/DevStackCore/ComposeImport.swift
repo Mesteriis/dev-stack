@@ -1,14 +1,34 @@
 import AppKit
 import Foundation
 
-struct ComposeImportRequest: Sendable {
+package struct ComposeImportRequest: Sendable {
     let composeURL: URL
+    let composeOverlayURLs: [URL]
     let targetProfileName: String
     let replaceServices: Bool
     let services: [ServiceDefinition]
     let composeContent: String
     let composeWorkingDirectory: String
     let composeProjectName: String
+    package init(
+        composeURL: URL,
+        composeOverlayURLs: [URL],
+        targetProfileName: String,
+        replaceServices: Bool,
+        services: [ServiceDefinition],
+        composeContent: String,
+        composeWorkingDirectory: String,
+        composeProjectName: String
+    ) {
+        self.composeURL = composeURL
+        self.composeOverlayURLs = composeOverlayURLs
+        self.targetProfileName = targetProfileName
+        self.replaceServices = replaceServices
+        self.services = services
+        self.composeContent = composeContent
+        self.composeWorkingDirectory = composeWorkingDirectory
+        self.composeProjectName = composeProjectName
+    }
 }
 
 @MainActor
@@ -186,6 +206,7 @@ final class ComposeImportWindowController: NSWindowController, NSWindowDelegate 
 
         let request = ComposeImportRequest(
             composeURL: composeURL,
+            composeOverlayURLs: [],
             targetProfileName: profileName,
             replaceServices: replaceServicesCheckbox.state == .on,
             services: selectedServices,

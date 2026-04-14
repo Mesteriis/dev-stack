@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var snapshot: AppSnapshot?
     private var profiles: [String] = []
     private var activeProfiles: [String] = []
-    private var servers: [RemoteServerDefinition] = []
+    private var runtimeTargets: [RemoteServerDefinition] = []
     private var dockerContexts: [DockerContextEntry] = []
     private var errorMessage: String?
     private var isRefreshing = false
@@ -178,21 +178,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openProfileEditor(profile: nil, beginWithAddService: false)
     }
 
-    @objc private func newServerAction(_ sender: Any?) {
+    @objc private func newRuntimeAction(_ sender: Any?) {
         let suggestedContext = dockerContexts.first(where: \.isCurrent)?.name ?? "default"
         if let server = ServerWizardWindowController.runModal(
             store: store,
             existingServer: nil,
             suggestedDockerContext: suggestedContext
         ) {
-            lastMessage = "Server '\(server.name)' saved"
+            lastMessage = "Runtime '\(server.name)' saved"
             refreshSnapshot(force: true)
         }
     }
 
-    @objc private func editCurrentServerAction(_ sender: Any?) {
+    @objc private func editCurrentRuntimeAction(_ sender: Any?) {
         guard let server = loadCurrentServer() else {
-            showError("No server selected for the current profile")
+            showError("No runtime selected for the current profile")
             return
         }
 
@@ -202,27 +202,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             existingServer: server,
             suggestedDockerContext: suggestedContext
         ) {
-            lastMessage = "Server '\(updated.name)' updated"
+            lastMessage = "Runtime '\(updated.name)' updated"
             refreshSnapshot(force: true)
         } else {
             refreshSnapshot(force: true)
         }
     }
 
-    @objc private func editServerAction(_ sender: NSMenuItem) {
+    @objc private func editRuntimeAction(_ sender: NSMenuItem) {
         guard let serverName = sender.representedObject as? String else {
             return
         }
 
         do {
-            let server = try store.loadServer(named: serverName)
+            let server = try store.loadRuntime(named: serverName)
             let suggestedContext = dockerContexts.first(where: \.isCurrent)?.name ?? server.dockerContext
             if let updated = ServerWizardWindowController.runModal(
                 store: store,
                 existingServer: server,
                 suggestedDockerContext: suggestedContext
             ) {
-                lastMessage = "Server '\(updated.name)' updated"
+                lastMessage = "Runtime '\(updated.name)' updated"
             }
             refreshSnapshot(force: true)
         } catch {
@@ -279,8 +279,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func openServersFolderAction(_ sender: Any?) {
-        NSWorkspace.shared.open(store.serversDirectory)
+    @objc private func openRuntimesFolderAction(_ sender: Any?) {
+        NSWorkspace.shared.open(store.runtimesDirectory)
     }
 
     @objc private func openCurrentProjectFolderAction(_ sender: Any?) {
@@ -570,7 +570,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.snapshot = snapshotResult.snapshot
             self.profiles = snapshotResult.profiles
             self.activeProfiles = snapshotResult.activeProfiles
-            self.servers = snapshotResult.servers
+            self.runtimeTargets = snapshotResult.runtimeTargets
             self.dockerContexts = snapshotResult.dockerContexts
             self.aiToolSnapshots = snapshotResult.aiToolSnapshots
             self.currentGitProjectInfo = snapshotResult.gitProjectInfo
@@ -595,7 +595,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ) -> (
         snapshot: AppSnapshot?,
         profiles: [String],
-        servers: [RemoteServerDefinition],
+        runtimeTargets: [RemoteServerDefinition],
         dockerContexts: [DockerContextEntry],
         aiToolSnapshots: [AIToolQuotaSnapshot],
         activeProfiles: [String],
@@ -607,7 +607,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var snapshot: AppSnapshot?
         var profiles: [String] = []
         var activeProfiles: [String] = []
-        var servers: [RemoteServerDefinition] = []
+        var runtimeTargets: [RemoteServerDefinition] = []
         var dockerContexts: [DockerContextEntry] = []
         var aiToolSnapshots: [AIToolQuotaSnapshot] = []
         var gitProjectInfo: GitProjectInfo?
@@ -645,7 +645,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         do {
-            servers = try RuntimeController.remoteServers(store: store)
+            runtimeTargets = try RuntimeController.remoteServers(store: store)
         } catch {
             if errorMessage == nil {
                 errorMessage = error.localizedDescription
@@ -677,7 +677,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        return (snapshot, profiles, servers, dockerContexts, aiToolSnapshots, activeProfiles, gitProjectInfo, metricsSnapshot, errorMessage, cleanupMessage)
+        return (snapshot, profiles, runtimeTargets, dockerContexts, aiToolSnapshots, activeProfiles, gitProjectInfo, metricsSnapshot, errorMessage, cleanupMessage)
     }
 
     private func rebuildMenu() {
@@ -698,10 +698,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(makeOverviewMenu(currentProfileDefinition: currentProfileDefinition))
         menu.addItem(makeProfileMenu(currentProfileDefinition: currentProfileDefinition, isEnabled: hasCurrentProfile))
-        menu.addItem(makeServersMenu())
+        menu.addItem(makeRuntimesMenu())
         menu.addItem(makeVariablesMenu())
         menu.addItem(makeAILimitsMenu())
-        menu.addItem(makeDockerContextsMenu())
 
         menu.addItem(.separator())
         menu.addItem(actionItem(title: "Buy Me a Coffee", action: #selector(supportProjectAction(_:)), symbolName: "cup.and.saucer"))
@@ -720,7 +719,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         submenu.addItem(disabledItem(title: "Active Profiles: \(activeProfiles.count)", symbolName: "square.stack.3d.down.right"))
         submenu.addItem(disabledItem(title: "Docker: \(snapshot?.activeDockerContext ?? "unknown")", symbolName: "shippingbox"))
         if let currentProfileDefinition {
-            submenu.addItem(disabledItem(title: "Server: \(serverDisplayText(for: currentProfileDefinition))", symbolName: "network"))
+            submenu.addItem(disabledItem(title: "Runtime: \(serverDisplayText(for: currentProfileDefinition))", symbolName: "network"))
         }
         if let currentGitProjectInfo {
             let branchText = currentGitProjectInfo.currentBranch ?? "detached"
@@ -782,7 +781,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if let currentProfileDefinition {
-            submenu.addItem(disabledItem(title: "Server: \(serverDisplayText(for: currentProfileDefinition))", symbolName: "network"))
+            submenu.addItem(disabledItem(title: "Runtime: \(serverDisplayText(for: currentProfileDefinition))", symbolName: "network"))
             submenu.addItem(.separator())
         }
 
@@ -813,7 +812,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         submenu.addItem(.separator())
         submenu.addItem(actionItem(title: "Edit Current Profile…", action: #selector(editCurrentProfileAction(_:)), isEnabled: isEnabled, symbolName: "pencil"))
         submenu.addItem(actionItem(title: "Add Service To Current Profile…", action: #selector(addServiceToCurrentProfileAction(_:)), isEnabled: isEnabled, symbolName: "plus"))
-        submenu.addItem(actionItem(title: "Edit Current Server…", action: #selector(editCurrentServerAction(_:)), isEnabled: isEnabled, symbolName: "server.rack"))
+        submenu.addItem(actionItem(title: "Edit Current Runtime…", action: #selector(editCurrentRuntimeAction(_:)), isEnabled: isEnabled, symbolName: "server.rack"))
 
         submenu.addItem(.separator())
         submenu.addItem(makeProfileSwitcherMenu())
@@ -862,8 +861,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func makeDockerContextsMenu() -> NSMenuItem {
-        let item = submenuItem(title: "Docker Contexts", symbolName: "shippingbox")
+    private func makeDockerContextsMenu(title: String = "Available Docker Contexts") -> NSMenuItem {
+        let item = submenuItem(title: title, symbolName: "shippingbox")
         let submenu = NSMenu()
 
         if dockerContexts.isEmpty {
@@ -1034,19 +1033,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return formatter.string(from: date)
     }
 
-    private func makeServersMenu() -> NSMenuItem {
-        let item = submenuItem(title: "Servers", symbolName: "server.rack")
+    private func makeRuntimesMenu() -> NSMenuItem {
+        let item = submenuItem(title: "Runtimes", symbolName: "server.rack")
         let submenu = NSMenu()
         let currentServerName = selectedProfileName()
-            .flatMap { try? store.loadProfile(named: $0).serverName }
+            .flatMap { try? store.loadProfile(named: $0).runtimeName }
 
-        if servers.isEmpty {
-            submenu.addItem(disabledItem(title: "No servers"))
+        submenu.addItem(disabledItem(title: "Current Docker Context: \(snapshot?.activeDockerContext ?? "unknown")", symbolName: "shippingbox"))
+
+        submenu.addItem(.separator())
+
+        if runtimeTargets.isEmpty {
+            submenu.addItem(disabledItem(title: "No saved runtimes"))
         } else {
-            for server in servers {
+            for server in runtimeTargets {
                 let menuItem = actionItem(
                     title: "\(server.name)  \(server.connectionSummary)",
-                    action: #selector(editServerAction(_:)),
+                    action: #selector(editRuntimeAction(_:)),
                     symbolName: server.isLocal ? "desktopcomputer" : "network"
                 )
                 menuItem.representedObject = server.name
@@ -1056,8 +1059,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         submenu.addItem(.separator())
-        submenu.addItem(actionItem(title: "New Server…", action: #selector(newServerAction(_:)), symbolName: "plus.circle"))
-        submenu.addItem(actionItem(title: "Open Servers Folder", action: #selector(openServersFolderAction(_:)), symbolName: "folder"))
+        submenu.addItem(makeDockerContextsMenu())
+        submenu.addItem(.separator())
+        submenu.addItem(actionItem(title: "New Runtime…", action: #selector(newRuntimeAction(_:)), symbolName: "plus.circle"))
+        submenu.addItem(actionItem(title: "Open Runtimes Folder", action: #selector(openRuntimesFolderAction(_:)), symbolName: "folder"))
 
         item.submenu = submenu
         return item
@@ -1106,19 +1111,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func beginComposeImport(from url: URL) {
         do {
-            let content = try String(contentsOf: url, encoding: .utf8)
-            let importedServices = ComposeSupport.importServices(
-                from: content,
-                workingDirectory: url.deletingLastPathComponent()
-            )
-            guard !importedServices.isEmpty else {
-                throw ValidationError("No published ports were detected in \(url.lastPathComponent).")
-            }
+            let imported = try ProfileImportService.importedServices(from: url)
 
             let controller = ComposeImportWindowController(
                 composeURL: url,
-                composeContent: content,
-                importedServices: importedServices,
+                composeContent: imported.content,
+                importedServices: imported.services,
                 profiles: profiles,
                 currentProfileName: selectedProfileName(),
                 onImport: { [weak self] request in
@@ -1139,52 +1137,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openImportedComposeInEditor(_ request: ComposeImportRequest) {
-        let existingProfile = try? store.loadProfile(named: request.targetProfileName)
-        let currentProfile = selectedProfileName().flatMap { try? store.loadProfile(named: $0) }
-        var profile = existingProfile ?? ProfileDefinition(
-            name: request.targetProfileName,
-            serverName: existingProfile?.serverName
-                ?? currentProfile?.serverName
-                ?? servers.first?.name
-                ?? "",
-            dockerContext: snapshot?.configuredDockerContext
-                ?? currentProfile?.dockerContext
-                ?? dockerContexts.first(where: \.isCurrent)?.name
-                ?? "default",
-            tunnelHost: existingProfile?.tunnelHost
-                ?? currentProfile?.tunnelHost
-                ?? "docker",
-            shellExports: existingProfile?.shellExports ?? [],
-            services: existingProfile?.services ?? [],
-            compose: existingProfile?.compose ?? ComposeDefinition()
-        )
-
-        profile.name = request.targetProfileName
-        profile.compose.content = request.composeContent
-        profile.compose.sourceFile = request.composeURL.path
-        profile.compose.additionalSourceFiles = []
-        profile.compose.workingDirectory = request.composeWorkingDirectory
-        if profile.compose.projectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            profile.compose.projectName = request.composeProjectName
+        do {
+            let profile = try ProfileImportService.draftProfile(
+                from: request,
+                store: store,
+                currentProfileName: selectedProfileName(),
+                activeDockerContext: snapshot?.configuredDockerContext,
+                dockerContexts: dockerContexts,
+                runtimeTargets: runtimeTargets
+            )
+            openProfileEditor(profile: profile, beginWithAddService: false)
+        } catch {
+            showError(error.localizedDescription)
         }
-
-        if request.replaceServices {
-            profile.services = request.services
-        } else {
-            var merged = Dictionary(uniqueKeysWithValues: profile.services.map { ($0.name, $0) })
-            for service in request.services {
-                merged[service.name] = service
-            }
-            profile.services = merged.values.sorted { $0.name < $1.name }
-        }
-
-        openProfileEditor(profile: profile, beginWithAddService: false)
     }
 
     private func persistProfile(_ profile: ProfileDefinition, originalName: String?) throws {
         let previousProfile = originalName.flatMap { try? store.loadProfile(named: $0) }
-        if !profile.serverName.isEmpty {
-            _ = try store.loadServer(named: profile.serverName)
+        if !profile.runtimeName.isEmpty {
+            _ = try store.loadRuntime(named: profile.runtimeName)
         }
         try store.saveProfile(profile, originalName: originalName)
         let current = snapshot?.profile ?? store.currentProfileName()
@@ -1221,14 +1192,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func loadCurrentServer() -> RemoteServerDefinition? {
-        guard let profile = loadCurrentProfile(), !profile.serverName.isEmpty else {
+        guard let profile = loadCurrentProfile(), !profile.runtimeName.isEmpty else {
             return nil
         }
-        return try? store.loadServer(named: profile.serverName)
+        return try? store.loadRuntime(named: profile.runtimeName)
     }
 
     private func serverDisplayText(for profile: ProfileDefinition) -> String {
-        if !profile.serverName.isEmpty, let server = try? store.loadServer(named: profile.serverName) {
+        if !profile.runtimeName.isEmpty, let server = try? store.loadRuntime(named: profile.runtimeName) {
             return "\(server.name)  \(server.remoteDockerServerDisplay)"
         }
         return profile.remoteDockerServer
@@ -1249,7 +1220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return true
         }
         return previous.name != next.name
-            || previous.serverName != next.serverName
+            || previous.runtimeName != next.runtimeName
             || previous.dockerContext != next.dockerContext
             || previous.compose.projectName != next.compose.projectName
             || previous.compose.workingDirectory != next.compose.workingDirectory
@@ -1395,7 +1366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var watchPaths: [URL] = [
             store.rootDirectory,
             store.profilesDirectory,
-            store.serversDirectory,
+            store.runtimesDirectory,
         ]
 
         for profileName in profiles {

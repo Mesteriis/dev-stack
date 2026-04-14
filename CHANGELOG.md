@@ -14,8 +14,9 @@ The format is inspired by Keep a Changelog, and the project follows a pragmatic 
 - smoke-test executable for compose parsing and profile normalization
 - architecture, support and release documentation
 - dependency update automation and release artifact workflow
-- managed Docker server definitions stored in Application Support
-- a server setup wizard for local and SSH-backed Docker runtimes
+- release packaging as a single installer `.pkg` containing menu apps and `dx` CLI
+- managed runtime target definitions stored in Application Support
+- a runtime setup wizard for local Docker contexts and SSH-backed Docker runtimes
 - remote Docker preparation that can verify SSH, create Docker contexts and bootstrap Docker on apt-based hosts
 - a single-instance process lock that re-focuses the running menu bar app instead of allowing duplicate launches
 - tracked source compose files for imported profiles
@@ -37,8 +38,9 @@ The format is inspired by Keep a Changelog, and the project follows a pragmatic 
 - compose planning and runtime generation now use canonical `docker compose config --format json`, with the fallback parser kept only for degraded import scenarios
 - the app now manages profile runtime itself instead of delegating orchestration to an external helper CLI
 - profile storage moved to the app's own Application Support directory
-- profiles now target saved server entries instead of duplicating remote Docker connection details inline
-- SSH tunnel launch agents now understand managed server ports and use stricter non-interactive SSH options
+- profiles now target saved runtime entries instead of duplicating remote Docker connection details inline
+- SSH tunnel launch agents now understand managed runtime ports and use stricter non-interactive SSH options
+- saved runtimes and raw Docker contexts are now grouped under a single `Runtimes` menu instead of split top-level sections
 - remote compose startup now syncs project-relative bind mounts from the project folder and rejects host bind sources outside the project tree
 - imported profiles are now automatically removed when their tracked source compose file is deleted
 - variable resolution for compose now follows `Variable Manager -> project env files -> Keychain secrets`

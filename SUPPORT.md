@@ -10,7 +10,7 @@ For bug reports, use the bug report template and include:
 - Swift version
 - Docker runtime
 - active Docker context
-- whether the problem is local-only or tied to a saved remote server
+- whether the problem is local-only or tied to a saved runtime target
 - the affected profile name and whether it was the current profile or another active profile
 - whether the issue involved the single-instance lock or a relaunch
 - whether the issue involves tunnels, compose or profile switching

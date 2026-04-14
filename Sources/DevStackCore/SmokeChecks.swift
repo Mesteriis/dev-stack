@@ -20,7 +20,15 @@ package enum DevStackSmokeChecks {
         try testProfileNormalizationResolvesComposeOverlays()
         try testManagedVariableNormalizationAndFiltering()
         try testEnvironmentImportParsing()
-        try testProfileNormalizationPreservesServerReference()
+        try testProfileNormalizationPreservesRuntimeReference()
+        try testProfileEncodingUsesRuntimeNameKey()
+        try testDXCommandParsing()
+        try testProfileImportDraftWiring()
+        try testDXUseProfileWiring()
+        try testDXEnvCheckFormatting()
+        try testUUIDGenerators()
+        try testMissingEnvironmentDetection()
+        try testClipboardSmartParser()
         try testProfileStoreUsesProjectDataDirectory()
         try testProfileStoreReturnsComposeSourceURLsInOrder()
         try testProfileNormalizationRejectsDuplicateLocalPorts()
@@ -143,7 +151,7 @@ package enum DevStackSmokeChecks {
         }
         """
         let legacyProfile = try JSONDecoder().decode(ProfileDefinition.self, from: Data(legacyProfileJSON.utf8))
-        try expect(legacyProfile.serverName.isEmpty, "Legacy profile JSON should decode without a server reference")
+        try expect(legacyProfile.runtimeName.isEmpty, "Legacy profile JSON should decode without a runtime reference")
     }
 
     private static func testParseComposeServicesSupportsLongSyntaxAndHostBindings() throws {
@@ -309,7 +317,7 @@ package enum DevStackSmokeChecks {
         try expect(parsed["EMPTY"] == "", "env parser should preserve empty assignments")
     }
 
-    private static func testProfileNormalizationPreservesServerReference() throws {
+    private static func testProfileNormalizationPreservesRuntimeReference() throws {
         let profile = try ProfileDefinition(
             name: "Remote Demo",
             serverName: "sandbox-host",
@@ -320,7 +328,265 @@ package enum DevStackSmokeChecks {
             compose: ComposeDefinition()
         ).normalized()
 
-        try expect(profile.serverName == "sandbox-host", "Profile should preserve selected server name")
+        try expect(profile.runtimeName == "sandbox-host", "Profile should preserve selected runtime name")
+    }
+
+    private static func testProfileEncodingUsesRuntimeNameKey() throws {
+        let profile = try ProfileDefinition(
+            name: "Remote Demo",
+            serverName: "sandbox-host",
+            dockerContext: "srv-sandbox-host",
+            tunnelHost: "root@192.168.1.33",
+            shellExports: [],
+            services: [],
+            compose: ComposeDefinition()
+        ).normalized()
+
+        let data = try JSONEncoder().encode(profile)
+        let text = String(decoding: data, as: UTF8.self)
+        try expect(text.contains("\"runtimeName\""), "Encoded profile JSON should use runtimeName")
+        try expect(!text.contains("\"serverName\""), "Encoded profile JSON should not write legacy serverName")
+    }
+
+    private static func testUUIDGenerators() throws {
+        let generatedV4 = try ContextValueGenerator.generate(kind: .uuidV4)
+        try expect(generatedV4.range(of: #"^[0-9a-f-]{36}$"#, options: .regularExpression) != nil, "UUID v4 generator should emit lowercase UUID text")
+        try expect(generatedV4.split(separator: "-")[2].first == "4", "UUID v4 generator should emit version 4 identifiers")
+
+        let fixedDate = Date(timeIntervalSince1970: 1_716_000_000)
+        let generatedV7 = try ContextValueGenerator.generate(
+            kind: .uuidV7,
+            now: fixedDate,
+            randomDataProvider: { count in Data(repeating: 0xAB, count: count) }
+        )
+        try expect(generatedV7.split(separator: "-")[2].first == "7", "UUID v7 generator should emit version 7 identifiers")
+        try expect(["8", "9", "a", "b"].contains(String(generatedV7.split(separator: "-")[3].first!)), "UUID v7 generator should emit RFC variant bits")
+    }
+
+    private static func testMissingEnvironmentDetection() throws {
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = ProfileStore(
+            rootDirectory: root.appendingPathComponent("state", isDirectory: true),
+            logsDirectory: root.appendingPathComponent("logs", isDirectory: true),
+            launchAgentsDirectory: root.appendingPathComponent("agents", isDirectory: true)
+        )
+        try store.ensureRuntimeDirectories()
+
+        let projectDirectory = root.appendingPathComponent("project", isDirectory: true)
+        try fileManager.createDirectory(at: projectDirectory, withIntermediateDirectories: true)
+        let composeURL = projectDirectory.appendingPathComponent("docker-compose.yml", isDirectory: false)
+        let compose = """
+        services:
+          app:
+            image: demo/app
+            environment:
+              PRESENT_KEY: ${PRESENT_KEY}
+              EMPTY_KEY: ${EMPTY_KEY}
+              MANAGED_KEY: ${MANAGED_KEY}
+              EXTERNAL_KEY: ${EXTERNAL_KEY}
+              MISSING_KEY: ${MISSING_KEY}
+        """
+        try compose.write(to: composeURL, atomically: true, encoding: .utf8)
+        try "PRESENT_KEY=alpha\nEMPTY_KEY=\n".write(
+            to: projectDirectory.appendingPathComponent(".env", isDirectory: false),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let profile = try ProfileDefinition(
+            name: "Env Demo",
+            serverName: "",
+            dockerContext: "default",
+            tunnelHost: "docker",
+            shellExports: [],
+            externalEnvironmentKeys: ["EXTERNAL_KEY"],
+            services: [],
+            compose: ComposeDefinition(
+                projectName: "env-demo",
+                workingDirectory: projectDirectory.path,
+                sourceFile: composeURL.path,
+                additionalSourceFiles: [],
+                autoDownOnSwitch: false,
+                autoUpOnActivate: false,
+                content: compose
+            )
+        ).normalized()
+
+        try store.upsertManagedVariable(
+            try ManagedVariableDefinition(name: "MANAGED_KEY", value: "managed", profileNames: [profile.name]).normalized()
+        )
+
+        let overview = try ComposeSupport.environmentOverview(profile: profile, store: store)
+        let entries = Dictionary(uniqueKeysWithValues: overview.entries.map { ($0.key, $0) })
+
+        try expect(entries["PRESENT_KEY"]?.isMissing == false, "present env keys should not be reported missing")
+        try expect(entries["EMPTY_KEY"]?.isEmptyValue == true, "empty env keys should be detected")
+        try expect(entries["MANAGED_KEY"]?.providedByManagedVariables == true, "managed variables should satisfy compose refs")
+        try expect(entries["EXTERNAL_KEY"]?.isMarkedExternal == true, "external compose refs should be tracked")
+        try expect(entries["MISSING_KEY"]?.isMissing == true, "missing compose refs should be reported")
+    }
+
+    private static func testClipboardSmartParser() throws {
+        let timestamp = ClipboardSmartParser.parse("1716000000")
+        try expect(timestamp?.value?.contains("T") == true, "clipboard parser should convert unix timestamps to ISO dates")
+
+        let json = ClipboardSmartParser.parse("{\"b\":1,\"a\":2}")
+        try expect(json?.preview.contains("\"a\"") == true, "clipboard parser should pretty-print JSON")
+
+        let base64 = ClipboardSmartParser.parse("SGVsbG8gRGV2U3RhY2s=")
+        try expect(base64?.value == "Hello DevStack", "clipboard parser should decode base64 text")
+    }
+
+    private static func testDXCommandParsing() throws {
+        let addProfile = try DXCommandParser.parse(["add", "profile", "-f", "docker-compose.yml"])
+        try expect(
+            addProfile == .addProfile(file: "docker-compose.yml"),
+            "dx parser should detect add profile command"
+        )
+        let useProfile = try DXCommandParser.parse(["use", "profile", "demo"])
+        try expect(
+            useProfile == .useProfile(name: "demo"),
+            "dx parser should detect use profile command"
+        )
+        let envCheck = try DXCommandParser.parse(["env", "check", "--profile", "demo"])
+        try expect(
+            envCheck == .envCheck(profile: "demo"),
+            "dx parser should detect env check command"
+        )
+    }
+
+    private static func testProfileImportDraftWiring() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = ProfileStore(
+            rootDirectory: root.appendingPathComponent("state", isDirectory: true),
+            logsDirectory: root.appendingPathComponent("logs", isDirectory: true),
+            launchAgentsDirectory: root.appendingPathComponent("agents", isDirectory: true)
+        )
+        try store.ensureRuntimeDirectories()
+
+        let composeURL = root.appendingPathComponent("docker-compose.yml", isDirectory: false)
+        try """
+        services:
+          api:
+            image: nginx
+            ports:
+              - "8080:80"
+        """.write(to: composeURL, atomically: true, encoding: .utf8)
+
+        let runtime = try RemoteServerDefinition(name: "local", transport: .local, dockerContext: "default").normalized()
+        let request = ComposeImportRequest(
+            composeURL: composeURL,
+            composeOverlayURLs: [root.appendingPathComponent("docker-compose.override.yml", isDirectory: false)],
+            targetProfileName: "api-dev",
+            replaceServices: true,
+            services: [ServiceDefinition(name: "api", role: "http", aliasHost: "api.localhost", localPort: 8080, remoteHost: "127.0.0.1", remotePort: 8080, tunnelHost: "", enabled: true, envPrefix: "API", extraExports: [])],
+            composeContent: try String(contentsOf: composeURL, encoding: .utf8),
+            composeWorkingDirectory: root.path,
+            composeProjectName: "demo"
+        )
+
+        let draft = try ProfileImportService.draftProfile(
+            from: request,
+            store: store,
+            currentProfileName: nil,
+            activeDockerContext: "default",
+            dockerContexts: [DockerContextEntry(name: "default", endpoint: "unix:///var/run/docker.sock", isCurrent: true)],
+            runtimeTargets: [runtime]
+        )
+
+        try expect(draft.runtimeName == "local", "import draft should attach selected runtime")
+        try expect(draft.compose.sourceFile == composeURL.path, "import draft should preserve compose source")
+        try expect(draft.compose.additionalSourceFiles.count == 1, "import draft should keep overlay files")
+        try expect(draft.services.count == 1, "import draft should carry imported services")
+    }
+
+    private static func testDXUseProfileWiring() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = ProfileStore(
+            rootDirectory: root.appendingPathComponent("state", isDirectory: true),
+            logsDirectory: root.appendingPathComponent("logs", isDirectory: true),
+            launchAgentsDirectory: root.appendingPathComponent("agents", isDirectory: true)
+        )
+        try store.ensureRuntimeDirectories()
+        try store.saveProfile(
+            try ProfileDefinition(name: "demo", serverName: "", dockerContext: "default", tunnelHost: "docker").normalized(),
+            originalName: nil
+        )
+
+        let report = try DXWorkflowService.useProfile(
+            named: "demo",
+            store: store,
+            activate: { name, store in
+                try store.saveCurrentProfile(name)
+                try store.markProfileActive(name)
+            },
+            snapshotProvider: { _, profileName in
+                AppSnapshot(
+                    profile: profileName,
+                    configuredDockerContext: "default",
+                    activeDockerContext: "default",
+                    tunnelLoaded: true,
+                    tunnelLabel: "local.devstackmenu.demo",
+                    compose: ComposeRuntimeSnapshot(
+                        configured: false,
+                        projectName: "",
+                        workingDirectory: "",
+                        autoDownOnSwitch: false,
+                        autoUpOnActivate: false,
+                        runningServices: []
+                    ),
+                    services: []
+                )
+            }
+        )
+
+        try expect(store.currentProfileName() == "demo", "dx use profile should update current profile")
+        try expect(report.activeProfileName == "demo", "dx use profile should report the selected profile")
+    }
+
+    private static func testDXEnvCheckFormatting() throws {
+        let overview = ComposeEnvironmentOverview(
+            workingDirectory: URL(fileURLWithPath: "/tmp/demo", isDirectory: true),
+            profileEnvironmentFile: URL(fileURLWithPath: "/tmp/demo/.env.devstack", isDirectory: false),
+            environmentFiles: [],
+            referencedKeys: ["API_KEY", "EXTERNAL_TOKEN"],
+            entries: [
+                ComposeEnvironmentEntry(
+                    key: "API_KEY",
+                    statusText: "Missing",
+                    envFileURL: nil,
+                    envFileValue: nil,
+                    suggestedWriteURL: URL(fileURLWithPath: "/tmp/demo/.env.devstack", isDirectory: false),
+                    providedByManagedVariables: false,
+                    hasProfileKeychainValue: false,
+                    hasProjectKeychainValue: false,
+                    isMarkedExternal: false,
+                    isMissing: true,
+                    isEmptyValue: false
+                ),
+                ComposeEnvironmentEntry(
+                    key: "EXTERNAL_TOKEN",
+                    statusText: "Marked as external",
+                    envFileURL: nil,
+                    envFileValue: nil,
+                    suggestedWriteURL: URL(fileURLWithPath: "/tmp/demo/.env.devstack", isDirectory: false),
+                    providedByManagedVariables: false,
+                    hasProfileKeychainValue: false,
+                    hasProjectKeychainValue: false,
+                    isMarkedExternal: true,
+                    isMissing: false,
+                    isEmptyValue: false
+                ),
+            ],
+            profileServiceName: "devstackmenu.demo",
+            projectServiceName: "devstackmenu.demo"
+        )
+
+        let text = DXWorkflowService.formatEnvironmentCheck(profileName: "demo", overview: overview)
+        try expect(text.contains("API_KEY"), "env check formatter should include missing keys")
+        try expect(text.contains("EXTERNAL_TOKEN"), "env check formatter should include external keys")
+        try expect(text.contains("Unresolved: 1"), "env check formatter should report unresolved count")
     }
 
     private static func testProfileStoreUsesProjectDataDirectory() throws {

@@ -1,10 +1,10 @@
 import Foundation
 
-struct RemoteServerPreparationResult: Sendable {
-    let server: RemoteServerDefinition
-    let remoteOS: String
+package struct RemoteServerPreparationResult: Sendable {
+    package let server: RemoteServerDefinition
+    package let remoteOS: String
     let dockerVersion: String
-    let serverVersion: String
+    package let serverVersion: String
 }
 
 private struct RemoteServerInspection: Sendable {
@@ -88,7 +88,7 @@ struct CompactMetricsSnapshot: Sendable {
 }
 
 package enum RuntimeController {
-    static func dockerContexts() throws -> [DockerContextEntry] {
+    package static func dockerContexts() throws -> [DockerContextEntry] {
         guard let dockerPath = ToolPaths.docker else {
             throw ValidationError("docker not found")
         }
@@ -108,7 +108,7 @@ package enum RuntimeController {
         try store.remoteServers().sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    static func currentDockerContext() throws -> String {
+    package static func currentDockerContext() throws -> String {
         guard let dockerPath = ToolPaths.docker else {
             throw ValidationError("docker not found")
         }
@@ -150,7 +150,7 @@ package enum RuntimeController {
         return (rewrite.content, rewrite.serviceNames.sorted())
     }
 
-    static func prepareServer(
+    package static func prepareServer(
         server: RemoteServerDefinition,
         store: ProfileStore,
         bootstrapIfNeeded: Bool
@@ -192,7 +192,7 @@ package enum RuntimeController {
         )
     }
 
-    static func statusSnapshot(store: ProfileStore, profileName: String) throws -> AppSnapshot {
+    package static func statusSnapshot(store: ProfileStore, profileName: String) throws -> AppSnapshot {
         let profile = try store.loadProfile(named: profileName)
         let resolvedServer = try resolvePrimaryServer(for: profile, store: store)
         let activeDockerContext = (try? currentDockerContext()) ?? "unknown"
@@ -231,7 +231,7 @@ package enum RuntimeController {
         )
     }
 
-    static func activateProfile(named profileName: String, store: ProfileStore) throws {
+    package static func activateProfile(named profileName: String, store: ProfileStore) throws {
         let profile = try store.loadProfile(named: profileName)
         let diagnostics = try runtimeDiagnostics(profile: profile, store: store)
         if !diagnostics.errors.isEmpty {
@@ -257,7 +257,7 @@ package enum RuntimeController {
         try runProfileHooks("after-activate", profile: profile, store: store)
     }
 
-    static func stopProfile(named profileName: String, store: ProfileStore) throws {
+    package static func stopProfile(named profileName: String, store: ProfileStore) throws {
         try bootoutAgents(profileName: profileName, store: store)
         if let profile = try? store.loadProfile(named: profileName),
            !(try isProfileRuntimeActive(profile: profile, store: store))

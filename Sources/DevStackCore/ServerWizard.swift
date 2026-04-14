@@ -40,7 +40,7 @@ final class ServerWizardWindowController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = existingServer == nil ? "New Docker Server" : "Edit Docker Server"
+        window.title = existingServer == nil ? "New Runtime Target" : "Edit Runtime Target"
         window.center()
         window.isReleasedWhenClosed = false
 
@@ -108,8 +108,8 @@ final class ServerWizardWindowController: NSWindowController, NSWindowDelegate {
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.maximumNumberOfLines = 0
         statusLabel.stringValue = existingServer == nil
-            ? "The wizard will verify SSH access, create the Docker context, and optionally bootstrap Docker on the host."
-            : "Save to re-check connectivity and refresh the managed Docker context."
+            ? "The wizard will verify connectivity, create or validate the Docker context, and optionally bootstrap Docker on the host."
+            : "Save to re-check connectivity and refresh this managed runtime target."
     }
 
     private func buildUI() {
@@ -125,7 +125,7 @@ final class ServerWizardWindowController: NSWindowController, NSWindowDelegate {
 
         let grid = NSGridView(views: [
             [label("Name"), nameField],
-            [label("Transport"), transportField],
+            [label("Runtime Type"), transportField],
             [label("Docker Context"), dockerContextField],
             [label("SSH Host"), sshHostField],
             [label("SSH User"), sshUserField],
@@ -223,7 +223,7 @@ final class ServerWizardWindowController: NSWindowController, NSWindowDelegate {
                 switch result {
                 case let .success(prepared):
                     do {
-                        try self.store.saveServer(prepared.server, originalName: self.originalName)
+                        try self.store.saveRuntime(prepared.server, originalName: self.originalName)
                         self.savedServer = prepared.server
                         self.modalResponse = .OK
                         self.statusLabel.stringValue = "Ready: \(prepared.server.connectionSummary) on \(prepared.remoteOS), Docker \(prepared.serverVersion)."
@@ -247,8 +247,8 @@ final class ServerWizardWindowController: NSWindowController, NSWindowDelegate {
 
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Delete server '\(originalName)'?"
-        alert.informativeText = "Profiles that still reference this server will stop working until you update them."
+        alert.messageText = "Delete runtime '\(originalName)'?"
+        alert.informativeText = "Profiles that still reference this runtime will stop working until you update them."
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
 
@@ -257,7 +257,7 @@ final class ServerWizardWindowController: NSWindowController, NSWindowDelegate {
         }
 
         do {
-            try store.deleteServer(named: originalName)
+            try store.deleteRuntime(named: originalName)
             savedServer = nil
             modalResponse = .cancel
             close()
@@ -315,7 +315,7 @@ final class ServerWizardWindowController: NSWindowController, NSWindowDelegate {
         case .local:
             return "Checking local Docker context \(server.dockerContext)…"
         case .ssh:
-            return "Checking \(server.remoteDockerServerDisplay) and preparing Docker context \(server.dockerContext)…"
+            return "Checking \(server.remoteDockerServerDisplay) and preparing runtime context \(server.dockerContext)…"
         }
     }
 
