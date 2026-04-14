@@ -129,14 +129,14 @@ package enum ContextValueGenerator {
     }
 }
 
-struct ClipboardSmartParseResult: Equatable, Sendable {
-    let title: String
-    let preview: String
-    let value: String?
+package struct ClipboardSmartParseResult: Equatable, Sendable {
+    package let title: String
+    package let preview: String
+    package let value: String?
 }
 
-enum ClipboardSmartParser {
-    static func parse(_ raw: String) -> ClipboardSmartParseResult? {
+package enum ClipboardSmartParser {
+    package static func parse(_ raw: String) -> ClipboardSmartParseResult? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return nil

@@ -36,50 +36,93 @@ There is no external helper CLI dependency in the runtime path anymore.
 
 ## Source Layout
 
+Phase 1 keeps one core target, but the code is now split by responsibility inside `DevStackCore`.
+
+### `Sources/DevStackCore/Domain/`
+
+- `Models/`: profile, runtime, compose, environment, and snapshot model types
+- `Validation/`: validation errors and normalization helpers
+
+### `Sources/DevStackCore/Infra/`
+
+- `Shell/`: command execution, tool path resolution, shell result types
+- `Storage/`: `ProfileStore` and filesystem path contracts
+
+### `Sources/DevStackCore/Compose/`
+
+- `ComposePlan.swift`: compose planning and environment model types
+- `ComposePlanBuilder.swift`: normalized compose planning through `docker compose config --format json`
+- `ComposeEnvironmentService.swift`: `.env`, managed variable, and missing-env resolution
+- `ComposeFileGenerationService.swift`: generated compose YAML emission
+- `ComposePreviewFormatter.swift`: plan/report formatting
+- `ComposeSecretSupport.swift`: Keychain-backed secret integration
+
+`Sources/DevStackCore/ComposeSupport.swift` now exists only as a thin facade over those services.
+
+### `Sources/DevStackCore/Runtime/`
+
+- `RuntimeStatusService.swift`: docker context discovery, status snapshots, stale profile cleanup
+- `RuntimeLifecycleService.swift`: profile activation, compose lifecycle, docker context switching, remote host preparation
+- `TunnelService.swift`: launchd tunnel setup and teardown
+- `RemoteSyncService.swift`: managed bind-mount rewrite and remote project sync
+- `RuntimeDiagnosticsService.swift`: compose and remote diagnostics
+- `RuntimeDeletionService.swift`: deletion plans and cleanup
+- `RuntimeReportService.swift`: logs, volumes, metrics, and remote file reports
+
+`Sources/DevStackCore/RuntimeController.swift` is now a thin compatibility facade.
+
+### `Sources/DevStackCore/Menu/`
+
+- menu assembly is split into status, profile, runtimes, variables, and AI limits builders
+
+### `Sources/DevStackCore/AppActions/`
+
+- runtime, profile, and report-related menu actions are grouped by workflow
+
+### `Sources/DevStackCore/Features/AIQuota/`
+
+- `AIToolQuotaInspector.swift`
+- `AILimitAlertManager.swift`
+- `AIMenuBuilder.swift`
+
+This keeps AI quota telemetry isolated from runtime orchestration.
+
 ### `Sources/DevStackCore/AppDelegate.swift`
 
-Owns the status item, menus, refresh loop and user actions.
+`AppDelegate` is reduced to app lifecycle wiring, status item ownership, menu coordination, and shared UI helpers.
 
-### `Sources/DevStackCore/Common.swift`
+### `Sources/DevStackCore/AppRefreshCoordinator.swift`
 
-Shared models and helpers:
+Owns snapshot collection, watcher refreshes, and IDE activation prompts.
 
-- profile definitions
-- runtime target definitions
-- validation and normalization
-- CLI path resolution
-- shell execution
-- profile and runtime-target storage
-- compose parsing helpers
-- managed variable storage
+### `Sources/DevStackCore/WindowCoordinator.swift`
 
-### `Sources/DevStackCore/ProfileEditor.swift`
+Owns editor/import window coordination and profile persistence callbacks.
 
-The AppKit editor for creating and updating DevStack profiles and services, including runtime-target selection and multi-file compose overlays.
+### Remaining AppKit Windows
 
-### `Sources/DevStackCore/ServerWizard.swift`
+- `ProfileEditor.swift`: profile editor shell and shared window helpers
+- `ProfileEditor/`: profile editor layout, runtime/compose source flows, environment tooling, and service dialog
+- `ServerWizard.swift`: runtime creation and preparation flow
+- `ComposeImport.swift`: compose import flow
+- `VariableManager.swift`: shared env variable manager
+- `SecretManager.swift`: profile secret manager
 
-The AppKit setup flow for defining local or SSH-backed runtime targets and preparing their Docker contexts.
+### CLI And Executables
 
-### `Sources/DevStackCore/ComposeImport.swift`
+- `Sources/DevStackCore/DXCLI.swift`: CLI parsing and workflow services
+- `Sources/dx/main.swift`: terminal UX and macOS app bridge
+- `Sources/DevStackMenu/main.swift`: thin app entry point
+- `Sources/DevStackSmokeTests/main.swift`: thin smoke runner
+- `Sources/DevStackSmokeTests/SmokeChecks.swift`: smoke verification logic kept out of shipping core
 
-The AppKit flow for importing a compose file into a profile editor session.
+### Compatibility Helpers
 
-### `Sources/DevStackCore/VariableManager.swift`
-
-The AppKit manager for non-secret shared env values that can be assigned to one or more profiles and imported from `.env` files.
-
-### `Sources/DevStackCore/SecretManager.swift`
-
-The AppKit manager for profile-scoped Keychain values used to satisfy `${VAR}` compose references.
-
-### `Sources/DevStackCore/SingleInstanceCoordinator.swift`
-
-Owns the process lock used to keep only one menu bar instance alive at a time.
-
-### `Sources/DevStackCore/ProjectContext.swift`
-
-Git and IDE integration used for branch hints, file watching and startup prompts for open projects in PyCharm and VS Code.
+- `Sources/DevStackCore/Common.swift`: thin compatibility/helper file with shared parsing helpers
+- `Sources/DevStackCore/SingleInstanceCoordinator.swift`: single-instance process lock
+- `Sources/DevStackCore/ProjectContext.swift`: Git and IDE state integration
+- `Sources/DevStackCore/ProfileImportService.swift`: compose import to draft-profile wiring
+- `Sources/DevStackCore/ContextUtilities.swift`: value generators and clipboard parsing helpers
 
 ## Persistence
 
@@ -128,5 +171,6 @@ Release distribution is produced through `Scripts/package-release.sh` and uses a
 
 - canonical compose planning depends on `docker compose config`; the fallback parser exists only for degraded import scenarios
 - remote host bootstrap is currently optimized for apt-based Linux dev hosts
-- the UI is AppKit code-first and not yet separated into smaller presentation components
+- the profile editor is split by workflow, but still remains an AppKit-heavy surface without dedicated UI tests
+- `dx/main.swift` still contains the existing macOS app bridge and has not been extracted yet
 - smoke checks validate critical logic, but there is no full UI automation

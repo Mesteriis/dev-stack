@@ -1,3 +1,4 @@
+import DevStackCore
 import Foundation
 
 struct SmokeCheckFailure: Error, CustomStringConvertible {

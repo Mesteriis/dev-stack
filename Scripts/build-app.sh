@@ -11,7 +11,22 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 IMPORTER_APP="$BUILD_DIR/Import Compose To DX.app"
 IMPORTER_RESOURCES_DIR="$IMPORTER_APP/Contents/Resources"
 
-rm -rf "$APP_DIR" "$IMPORTER_APP"
+remove_or_archive() {
+  target="$1"
+  [ -e "$target" ] || return 0
+
+  if rm -rf "$target" 2>/dev/null; then
+    return 0
+  fi
+
+  target_dir="$(dirname "$target")"
+  target_name="$(basename "$target")"
+  archived_target="$target_dir/.$target_name.stale.$(date +%s).$$"
+  mv "$target" "$archived_target"
+}
+
+remove_or_archive "$APP_DIR"
+remove_or_archive "$IMPORTER_APP"
 mkdir -p "$BUILD_DIR" "$MACOS_DIR" "$RESOURCES_DIR"
 
 swift build \

@@ -84,7 +84,7 @@ private enum CodexRateMetric {
     case secondary
 }
 
-enum AIToolQuotaInspector {
+package enum AIToolQuotaInspector {
     static func collectAll(forceRefresh: Bool = false) -> [AIToolQuotaSnapshot] {
         _ = forceRefresh
         return AIToolKind.allCases.map(inspect)

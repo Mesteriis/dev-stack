@@ -140,11 +140,11 @@ package enum DXCommandParser {
 }
 
 package struct DXStatusReport: Sendable {
-    let activeProfileName: String?
-    let activeRuntimeName: String?
-    let activeRuntimeDisplay: String?
-    let activeDockerContext: String
-    let snapshot: AppSnapshot?
+    package let activeProfileName: String?
+    package let activeRuntimeName: String?
+    package let activeRuntimeDisplay: String?
+    package let activeDockerContext: String
+    package let snapshot: AppSnapshot?
 }
 
 package enum DXWorkflowService {

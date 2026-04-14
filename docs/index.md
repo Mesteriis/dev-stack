@@ -8,6 +8,7 @@ title: DevStackMenu Docs
 Welcome to the documentation hub for DevStackMenu.
 
 - [Architecture](ARCHITECTURE.md)
+- [ADR Index](adr/0000-index.md)
 - [CLI Guardrails](CLI_GUARDRAILS.md)
 - [Releasing (repository root)](https://github.com/Mesteriis/dev-stack/blob/main/RELEASING.md)
 - [Support (repository root)](https://github.com/Mesteriis/dev-stack/blob/main/SUPPORT.md)
@@ -17,6 +18,7 @@ Welcome to the documentation hub for DevStackMenu.
 
 - Installation and quickstart: `README.md`
 - Runtime model and app architecture: [Architecture](ARCHITECTURE.md)
+- Architecture decisions and boundary changes: [ADR Index](adr/0000-index.md)
 - Release process: [Releasing (repository root)](https://github.com/Mesteriis/dev-stack/blob/main/RELEASING.md)
 - Supported workflows and guardrails: [CLI Guardrails](CLI_GUARDRAILS.md)
 - Support and issue triage: [Support (repository root)](https://github.com/Mesteriis/dev-stack/blob/main/SUPPORT.md)
