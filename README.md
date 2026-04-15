@@ -42,7 +42,7 @@ Repository: [`Mesteriis/dev-stack`](https://github.com/Mesteriis/dev-stack)
 
 ## Screenshots
 
-The current menu structure is grouped around the workflows that matter during day-to-day dev work: status, the active profile, runtimes, variables and AI CLI limits.
+The current menu structure is grouped around the workflows that matter during day-to-day dev work: status, the active profile, runtimes, and variables.
 
 ![DevStackMenu main menu with grouped navigation](docs/img/menu-overview.png)
 
@@ -192,8 +192,8 @@ If you want Gatekeeper-friendly installs without removing quarantine manually, t
 - includes a profile-scoped Keychain-backed secret manager for `${VAR}` compose references
 - reads IDE state from PyCharm and VS Code on startup and can offer to activate a matching profile automatically
 - copies shell exports for the active profile to the clipboard
-- shows an `AI CLI Limits` menu for Codex, Sonnet, Qwen and Google with progress bars, token highlights, local authorization and last-known quota status where available
-- can raise local notifications when tracked CLI limits cross 25% thresholds or are projected to exhaust before reset
+- provides fast status, runtime and profile switching for compose-driven local and remote workflows
+- keeps menu actions focused on lifecycle, inspection, profile operations, variables, and secrets
 - manages SSH tunnel launch agents itself instead of delegating orchestration to an external helper CLI
 - can preview compose changes, open logs, metrics, volume and remote-file reports in the standard macOS viewer
 - can delete a profile together with its compose stack, named volumes, project-scoped managed data and synced remote data
@@ -222,7 +222,6 @@ Current limitations:
 - remote compose sync supports project-relative bind mounts only; absolute host paths outside the project directory are treated as unsupported for remote runs
 - managed variables are plain stored config intended for shared dev env values and are applied before project `.env` files; sensitive data should still live in the Keychain-backed secrets flow
 - automatic remote Docker bootstrap is currently implemented for apt-based Linux hosts; other distributions still need manual setup
-- the `AI CLI Limits` menu is intentionally local-first: Codex gets real last-known rate-limit data from session logs, while other tools may expose only auth state, token usage hints or last quota errors if they do not publish local quota counters
 - distribution artifacts are currently unsigned
 - UI automation is not in place yet; verification is build + smoke-check oriented
 
@@ -332,7 +331,6 @@ The current top-level menu is intentionally operational:
 - current profile name or `Select Profile`
 - `Runtimes`
 - `Variables`
-- `AI CLI Limits`
 
 Profile-specific actions stay under the current-profile item so switching, runtime control, compose actions, secrets and deletion live in one place. Raw Docker contexts are now grouped inside `Runtimes`, not split into a separate top-level menu.
 

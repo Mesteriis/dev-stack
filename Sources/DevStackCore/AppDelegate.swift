@@ -17,7 +17,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var isRefreshing = false
     var lastMessage: String?
     var editors: [NSWindowController] = []
-    var aiToolSnapshots: [AIToolQuotaSnapshot] = []
     var currentGitProjectInfo: GitProjectInfo?
     var currentMetricsSnapshot: CompactMetricsSnapshot?
     var ideActivationPromptShown = false
@@ -80,7 +79,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(makeProfileMenu(currentProfileDefinition: currentProfileDefinition, isEnabled: hasCurrentProfile))
         menu.addItem(makeRuntimesMenu())
         menu.addItem(makeVariablesMenu())
-        menu.addItem(makeAILimitsMenu())
 
         menu.addItem(.separator())
         menu.addItem(actionItem(title: "Buy Me a Coffee", action: #selector(supportProjectAction(_:)), symbolName: "cup.and.saucer"))

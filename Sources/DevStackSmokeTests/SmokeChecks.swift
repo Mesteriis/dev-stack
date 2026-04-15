@@ -11,8 +11,6 @@ package enum DevStackSmokeChecks {
         try testLocalContainerModeMapping()
         try testRemoteServerNormalization()
         try testLegacyModelDecodingDefaults()
-        try testCodexRateLimitParser()
-        try testTimestampedQuotaIssueParser()
         try testParseComposeServicesImportsPublishedPorts()
         try testParseComposeServicesSupportsLongSyntaxAndHostBindings()
         try testManagedDataRewriteUsesServiceScopedDirectories()
@@ -68,25 +66,6 @@ package enum DevStackSmokeChecks {
         try expect(services.map(\.name) == ["api", "redis"], "compose parser should preserve service names")
         try expect(services.map(\.localPort) == [8080, 6379], "compose parser should detect published ports")
         try expect(services.map(\.role) == ["http", "redis"], "compose parser should infer common roles")
-    }
-
-    private static func testCodexRateLimitParser() throws {
-        let line = """
-        {"timestamp":"2026-02-14T13:05:41.155Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","primary":{"used_percent":1.0,"window_minutes":300,"resets_at":1771092291}}}}
-        """
-
-        let parsed = AIToolQuotaInspector.parseCodexRateLimitEvent(from: line)
-
-        try expect(parsed != nil, "codex rate-limit parser should detect token_count events")
-        try expect(parsed?.primaryUsedPercent == 0.01, "codex rate-limit parser should normalize whole-number percent points")
-        try expect(parsed?.primaryWindowMinutes == 300, "codex rate-limit parser should read window minutes")
-        try expect(parsed?.primaryResetsAt != nil, "codex rate-limit parser should read reset timestamp")
-    }
-
-    private static func testTimestampedQuotaIssueParser() throws {
-        let line = "2026-04-02T09:14:38.793Z [ERROR] [OPENAI_ERROR] OpenAI API Streaming Error: 429 You exceeded your current quota"
-        let parsed = AIToolQuotaInspector.parseTimestampedQuotaIssue(from: line)
-        try expect(parsed != nil, "timestamped quota issue parser should decode ISO8601 timestamps")
     }
 
     private static func testLocalContainerModeMapping() throws {

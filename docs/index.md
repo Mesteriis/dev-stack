@@ -27,7 +27,7 @@ Welcome to the documentation hub for DevStackMenu.
 
 ### Main Navigation
 
-The top-level menu is intentionally short: one entry for status, one entry for the current profile, then grouped sections for runtimes, variables and AI CLI limits.
+The top-level menu is intentionally short: one entry for status, one entry for the current profile, then grouped sections for runtimes and variables.
 
 ![Main DevStackMenu navigation](img/menu-overview.png)
 
@@ -54,9 +54,3 @@ Runtimes are grouped around the current Docker context. The menu highlights the 
 The variables menu stays intentionally compact. It answers two practical questions first: how many managed variables exist, and how many are assigned to the current profile. From there it goes directly into the variable manager.
 
 ![Variables submenu with managed and assigned counts](img/variables-menu.png)
-
-### AI CLI Limits
-
-AI CLI limits are presented as operational telemetry rather than as a generic tools page. The menu surfaces reset times, token-heavy recent turns, remaining quota and a quick path to local auth/setup help.
-
-![AI CLI limits submenu with remaining quota progress bars](img/ai-cli-limits.png)

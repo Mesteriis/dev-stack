@@ -6,6 +6,17 @@ The format is inspired by Keep a Changelog, and the project follows a pragmatic 
 
 ## [Unreleased]
 
+## [0.1.6]
+
+### Removed
+
+- Removed the `AI CLI Limits` feature and associated quota parsing/notification logic from the mainline build and menu model.
+- Removed AI quota-related source code (`Sources/DevStackCore/Features/AIQuota/`) and the `makeAILimitsMenu` assembly path so the menu now exposes only status, profile, runtime, and variable workflows.
+
+### Changed
+
+- Updated all user-facing documentation and screenshots to reflect the menu without the AI quota feature.
+
 ## [0.1.4]
 
 ### Added

@@ -17,7 +17,6 @@ Phase 1 refactoring keeps the existing SwiftPM target graph but introduces inter
 - `Compose/` for compose planning, environment resolution, file generation, and formatting
 - `Runtime/` for orchestration services and a thin `RuntimeController` facade
 - `Menu/`, `AppActions/`, and coordinators for AppKit menu assembly and app wiring
-- `Features/AIQuota/` for AI quota-specific logic
 
 ## Consequences
 

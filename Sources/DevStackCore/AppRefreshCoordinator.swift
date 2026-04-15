@@ -6,7 +6,6 @@ struct AppRefreshState {
     let profiles: [String]
     let runtimeTargets: [RemoteServerDefinition]
     let dockerContexts: [DockerContextEntry]
-    let aiToolSnapshots: [AIToolQuotaSnapshot]
     let activeProfiles: [String]
     let gitProjectInfo: GitProjectInfo?
     let metricsSnapshot: CompactMetricsSnapshot?
@@ -21,7 +20,6 @@ enum AppRefreshCoordinator {
         var activeProfiles: [String] = []
         var runtimeTargets: [RemoteServerDefinition] = []
         var dockerContexts: [DockerContextEntry] = []
-        var aiToolSnapshots: [AIToolQuotaSnapshot] = []
         var gitProjectInfo: GitProjectInfo?
         var metricsSnapshot: CompactMetricsSnapshot?
         var errorMessage: String?
@@ -64,8 +62,6 @@ enum AppRefreshCoordinator {
             }
         }
 
-        aiToolSnapshots = AIToolQuotaInspector.collectAll(forceRefresh: false)
-
         let selectedProfileName = AppDelegate.resolveCurrentProfileName(
             storedProfileName: store.currentProfileName(),
             profiles: profiles
@@ -94,7 +90,6 @@ enum AppRefreshCoordinator {
             profiles: profiles,
             runtimeTargets: runtimeTargets,
             dockerContexts: dockerContexts,
-            aiToolSnapshots: aiToolSnapshots,
             activeProfiles: activeProfiles,
             gitProjectInfo: gitProjectInfo,
             metricsSnapshot: metricsSnapshot,
@@ -108,10 +103,6 @@ extension AppDelegate {
     func refreshSnapshot(force: Bool = false) {
         if isRefreshing && !force {
             return
-        }
-
-        if force {
-            AIToolQuotaInspector.invalidateCache()
         }
 
         isRefreshing = true
@@ -130,7 +121,6 @@ extension AppDelegate {
             self.activeProfiles = snapshotState.activeProfiles
             self.runtimeTargets = snapshotState.runtimeTargets
             self.dockerContexts = snapshotState.dockerContexts
-            self.aiToolSnapshots = snapshotState.aiToolSnapshots
             self.currentGitProjectInfo = snapshotState.gitProjectInfo
             self.currentMetricsSnapshot = snapshotState.metricsSnapshot
             self.errorMessage = snapshotState.errorMessage
@@ -140,9 +130,6 @@ extension AppDelegate {
             self.isRefreshing = false
             self.configureProjectWatchers()
             self.maybePromptForOpenIDEProjects()
-            Task {
-                await AILimitAlertManager.process(snapshots: self.aiToolSnapshots)
-            }
             self.rebuildMenu()
             self.updateStatusButton()
         }

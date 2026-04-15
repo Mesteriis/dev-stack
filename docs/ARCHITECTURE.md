@@ -29,7 +29,6 @@ The app is self-contained at the orchestration layer:
 - it removes imported profiles if their tracked source compose file disappears
 - it resolves compose env input from managed variables, project env files and Keychain-backed secrets
 - it can prompt for profile activation when PyCharm or VS Code already has a matching project open
-- it inspects local AI CLI state for Codex, Sonnet, Qwen and Google and exposes last-known auth/quota information, progress bars, token hints and local alerts in the menu bar
 - it writes text reports for compose previews, logs, volumes, metrics and remote file listings, then opens them in the standard macOS viewer
 
 There is no external helper CLI dependency in the runtime path anymore.
@@ -76,22 +75,12 @@ Phase 1 keeps one core target, but the code is now split by responsibility insid
 
 ### `Sources/DevStackCore/Menu/`
 
-- menu assembly is split into status, profile, runtimes, variables, and AI limits builders
+- menu assembly is split into status, profile, runtimes, and variables builders
 
 ### `Sources/DevStackCore/AppActions/`
 
 - runtime, profile, and report-related menu actions are grouped by workflow
 
-### `Sources/DevStackCore/Features/AIQuota/`
-
-- `AIToolQuotaInspector.swift`
-- `AIToolQuotaInspectionService.swift`
-- `AIToolQuotaDataService.swift`
-- `AIToolQuotaModels.swift`
-- `AILimitAlertManager.swift`
-- `AIMenuBuilder.swift`
-
-This keeps AI quota telemetry isolated from runtime orchestration.
 
 ### `Sources/DevStackCore/AppDelegate.swift`
 
